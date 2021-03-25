@@ -64,7 +64,7 @@ constexpr uint8_t kPageShift = 12;
 constexpr uint32_t kPageSize = (1 << kPageShift);
 constexpr uint8_t kHugepageShift = 21;
 constexpr uint32_t kHugepageSize = (1 << kHugepageShift);
-constexpr uint8_t kNumCPUs = 20;
+constexpr uint8_t kNumCPUs = 24;
 constexpr uint8_t kNumSocket1CPUs = 24;
 
 static uint64_t round_to_hugepage_size(uint64_t size);
