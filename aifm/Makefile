@@ -29,6 +29,9 @@ test_array_add_rw_api_obj = $(test_array_add_rw_api_src:.cpp=.o)
 test_tcp_array_add_src = test/test_tcp_array_add.cpp
 test_tcp_array_add_obj = $(test_tcp_array_add_src:.cpp=.o)
 
+test_rdma_array_add_src = test/test_rdma_array_add.cpp
+test_rdma_array_add_obj = $(test_rdma_array_add_src:.cpp=.o)
+
 test_array_clock_replacement_src = test/test_array_clock_replacement.cpp
 test_array_clock_replacement_obj = $(test_array_clock_replacement_src:.cpp=.o)
 
@@ -93,12 +96,12 @@ test_embedded_pointer_src = test/test_embedded_pointer.cpp
 test_embedded_pointer_obj = $(test_embedded_pointer_src:.cpp=.o)
 
 lib_src = $(wildcard src/*.cpp)
-lib_src := $(filter-out src/tcp_device_server.cpp,$(lib_src))
+lib_src := $(filter-out src/tcp_device_server.cpp src/rdma_device_server.cpp,$(lib_src))
 lib_obj = $(lib_src:.cpp=.o)
 
 test_src = $(test_pointer_noswap_src) $(test_pointer_swap_src) $(test_pointer_concurrent_src)  \
 $(test_tcp_pointer_swap_src) $(test_array_add_src) $(test_array_nt_src) \
-$(test_array_clock_replacement_src) $(test_tcp_array_add_src) $(test_hopscotch_serial_src) \
+$(test_array_clock_replacement_src) $(test_tcp_array_add_src) $(test_rdma_array_add_src) $(test_hopscotch_serial_src) \
 $(test_slab_src) $(test_local_hopscotch_serial) $(test_hopscotch_gc_serial_src) \
 $(test_hopscotch_parallel_src) $(test_hopscotch_gc_parallel_src) $(test_tcp_hopscotch_gc_serial_src) \
 $(test_tcp_hopscotch_gc_parallel_src) $(test_hashtable_clock_replacement_src) $(test_local_list) \
@@ -114,13 +117,16 @@ dep = $(obj:.o=.d)
 tcp_device_server_src = src/tcp_device_server.cpp
 tcp_device_server_obj = $(tcp_device_server_src:.cpp=.o)
 
+rdma_device_server_src = src/rdma_device_server.cpp
+rdma_device_server_obj = $(rdma_device_server_src:.cpp=.o)
+
 override CXXFLAGS += -std=gnu++2a -fconcepts -Wno-unused-function
 CXXFLAGS := $(filter-out -std=gnu++17,$(CXXFLAGS))
 override LDFLAGS += -lnuma
 
 all: bin/test_pointer_noswap bin/test_pointer_swap bin/test_pointer_concurrent bin/test_array_add bin/test_array_nt \
-bin/test_array_clock_replacement bin/tcp_device_server bin/tcp_device_server bin/test_tcp_pointer_swap \
-bin/test_tcp_array_add bin/test_hopscotch_serial bin/test_slab bin/test_local_hopscotch_serial \
+bin/test_array_clock_replacement bin/rdma_device_server bin/tcp_device_server bin/tcp_device_server bin/test_tcp_pointer_swap \
+bin/test_tcp_array_add bin/test_rdma_array_add bin/test_hopscotch_serial bin/test_slab bin/test_local_hopscotch_serial \
 bin/test_hopscotch_gc_serial bin/test_hopscotch_parallel bin/test_hopscotch_gc_parallel \
 bin/test_tcp_hopscotch_gc_serial bin/test_tcp_hopscotch_gc_parallel bin/test_hashtable_clock_replacement \
 bin/test_local_skiplist_serial bin/test_local_list bin/test_list bin/test_list_gc bin/test_queue_gc bin/test_stack_gc \
@@ -144,6 +150,9 @@ bin/test_array_add: $(test_array_add_obj) $(librt_libs) $(RUNTIME_DEPS) $(lib_ob
 
 bin/test_tcp_array_add: $(test_tcp_array_add_obj) $(librt_libs) $(RUNTIME_DEPS) $(lib_obj)
 	$(LDXX) -o $@ $(test_tcp_array_add_obj) $(lib_obj) $(librt_libs) $(RUNTIME_LIBS) $(LDFLAGS)
+
+bin/test_rdma_array_add: $(test_rdma_array_add_obj) $(librt_libs) $(RUNTIME_DEPS) $(lib_obj)
+	$(LDXX) -o $@ $(test_rdma_array_add_obj) $(lib_obj) $(librt_libs) $(RUNTIME_LIBS) $(LDFLAGS)
 
 bin/test_array_clock_replacement: $(test_array_clock_replacement_obj) $(librt_libs) $(RUNTIME_DEPS) $(lib_obj)
 	$(LDXX) -o $@ $(test_array_clock_replacement_obj) $(lib_obj) $(librt_libs) $(RUNTIME_LIBS) $(LDFLAGS)
@@ -177,6 +186,9 @@ bin/test_tcp_hopscotch_gc_parallel: $(test_tcp_hopscotch_gc_parallel_obj) $(libr
 
 bin/tcp_device_server: $(tcp_device_server_obj) $(lib_obj)
 	$(LDXX) -o $@ $(tcp_device_server_obj) $(lib_obj) $(librt_libs) $(RUNTIME_LIBS) $(LDFLAGS)
+
+bin/rdma_device_server: $(rdma_device_server_obj) $(lib_obj)
+	$(LDXX) -o $@ $(rdma_device_server_obj) $(lib_obj) $(librt_libs) $(RUNTIME_LIBS) $(LDFLAGS)
 
 bin/test_slab: $(test_slab_obj) $(librt_libs) $(RUNTIME_DEPS) $(lib_obj)
 	$(LDXX) -o $@ $(test_slab_obj) $(lib_obj) $(librt_libs) $(RUNTIME_LIBS) $(LDFLAGS)
@@ -218,6 +230,9 @@ bin/test_embedded_pointer: $(test_embedded_pointer_obj) $(librt_libs) $(RUNTIME_
 	$(LDXX) -o $@ $(test_embedded_pointer_obj) $(lib_obj) $(librt_libs) $(RUNTIME_LIBS) $(LDFLAGS)
 
 $(tcp_device_server_obj): $(tcp_device_server_src)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+$(rdma_device_server_obj): $(rdma_device_server_src)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 libaifm.a: $(lib_obj)

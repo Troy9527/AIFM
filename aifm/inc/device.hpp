@@ -7,6 +7,7 @@ extern "C" {
 #include "helpers.hpp"
 #include "server.hpp"
 #include "shared_pool.hpp"
+#include "RDMAManager.hpp"
 
 namespace far_memory {
 
@@ -107,6 +108,28 @@ public:
 
   TCPDevice(netaddr raddr, uint32_t num_connections, uint64_t far_mem_size);
   ~TCPDevice();
+  void read_object(uint8_t ds_id, uint8_t obj_id_len, const uint8_t *obj_id,
+                   uint16_t *data_len, uint8_t *data_buf);
+  void write_object(uint8_t ds_id, uint8_t obj_id_len, const uint8_t *obj_id,
+                    uint16_t data_len, const uint8_t *data_buf);
+  bool remove_object(uint64_t ds_id, uint8_t obj_id_len, const uint8_t *obj_id);
+  void construct(uint8_t ds_type, uint8_t ds_id, uint8_t param_len,
+                 uint8_t *params);
+  void destruct(uint8_t ds_id);
+  void compute(uint8_t ds_id, uint8_t opcode, uint16_t input_len,
+               const uint8_t *input_buf, uint16_t *output_len,
+               uint8_t *output_buf);
+};
+
+class RDMADevice : public FarMemDevice {
+private:
+  constexpr static uint32_t	kPrefetchWinSize = 1 << 20;
+  Server			server_;
+  RDMAManager			manager_;
+
+public:
+  RDMADevice(netaddr raddr, uint64_t far_mem_size);
+  ~RDMADevice();
   void read_object(uint8_t ds_id, uint8_t obj_id_len, const uint8_t *obj_id,
                    uint16_t *data_len, uint8_t *data_buf);
   void write_object(uint8_t ds_id, uint8_t obj_id_len, const uint8_t *obj_id,

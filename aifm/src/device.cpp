@@ -8,6 +8,7 @@ extern "C" {
 #include "stats.hpp"
 
 #include <cstring>
+#include <iostream>
 
 namespace far_memory {
 
@@ -329,5 +330,37 @@ void TCPDevice::_compute(tcpconn_t *remote_slave, uint8_t ds_id, uint8_t opcode,
     helpers::tcp_read_until(remote_slave, output_buf, *output_len);
   }
 }
+
+RDMADevice::RDMADevice(netaddr raddr, uint64_t far_mem_size)
+	: FarMemDevice(far_mem_size, kPrefetchWinSize){
+		char	a[7], b[7];
+		memset(a, 0, sizeof(a));
+		memset(b, 0, sizeof(b));
+		memcpy(a, "client", 6);
+
+		manager_.tcp_connect(raddr);
+		manager_.tcp_sync_data(sizeof(a), a, b);
+		
+		std::cout << b << std::endl;
+}
+
+RDMADevice::~RDMADevice(){}
+
+void RDMADevice::read_object(uint8_t ds_id, uint8_t obj_id_len, const uint8_t *obj_id,
+		uint16_t *data_len, uint8_t *data_buf){}
+
+void RDMADevice::write_object(uint8_t ds_id, uint8_t obj_id_len, const uint8_t *obj_id, 
+		uint16_t data_len, const uint8_t *data_buf){}
+
+bool RDMADevice::remove_object(uint64_t ds_id, uint8_t obj_id_len, const uint8_t *obj_id){}
+
+void RDMADevice::construct(uint8_t ds_type, uint8_t ds_id, uint8_t param_len, 
+		uint8_t *params){}
+
+void RDMADevice::destruct(uint8_t ds_id){}
+
+void RDMADevice::compute(uint8_t ds_id, uint8_t opcode, uint16_t input_len,
+		const uint8_t *input_buf, uint16_t *output_len,
+		uint8_t *output_buf){}
 
 } // namespace far_memory
