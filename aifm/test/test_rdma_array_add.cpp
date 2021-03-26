@@ -89,8 +89,8 @@ void _main(void *arg) {
   std::unique_ptr<FarMemManager> manager =
       std::unique_ptr<FarMemManager>(FarMemManagerFactory::build(
           kCacheSize, kNumGCThreads,
-          new TCPDevice(raddr, kNumConnections, kFarMemSize)));
-  do_work(manager.get());
+          new RDMADevice(raddr, kFarMemSize)));
+  /*do_work(manager.get());*/
 }
 
 int main(int _argc, char *argv[]) {

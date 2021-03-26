@@ -333,7 +333,7 @@ void TCPDevice::_compute(tcpconn_t *remote_slave, uint8_t ds_id, uint8_t opcode,
 
 RDMADevice::RDMADevice(netaddr raddr, uint64_t far_mem_size)
 	: FarMemDevice(far_mem_size, kPrefetchWinSize){
-		char	a[7], b[7];
+		char	a[6], b[6];
 		memset(a, 0, sizeof(a));
 		memset(b, 0, sizeof(b));
 		memcpy(a, "client", 6);

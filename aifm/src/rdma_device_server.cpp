@@ -10,6 +10,7 @@ extern "C" {
 #include "helpers.hpp"
 #include "object.hpp"
 #include "server.hpp"
+#include "RDMAManager.hpp"
 
 #include <atomic>
 #include <cstdlib>
@@ -259,7 +260,7 @@ void slave_fn(tcpconn_t *c) {
 }
 
 void master_fn(tcpconn_t *c) {
-  uint8_t opcode;
+  /*uint8_t opcode;
   helpers::tcp_read_until(c, &opcode, TCPDevice::kOpcodeSize);
   BUG_ON(opcode != TCPDevice::kOpInit);
   process_init(c);
@@ -268,7 +269,17 @@ void master_fn(tcpconn_t *c) {
   BUG_ON(opcode != TCPDevice::kOpShutdown);
   process_shutdown(c);
   tcp_close(c);
-  has_shutdown = true;
+  has_shutdown = true;*/
+	RDMAManager manager;
+	manager.set_tcpconn(c);
+	char	a[6], b[6];
+	memset(a, 0, sizeof(a));
+	memset(b, 0, sizeof(b));
+	memcpy(a, "server", 6);
+
+	manager.tcp_sync_data(sizeof(a), a, b);
+	std::cout << b << std::endl;
+  	has_shutdown = true;
 }
 
 void do_work(uint16_t port) {
@@ -277,12 +288,10 @@ void do_work(uint16_t port) {
   tcp_listen(server_addr, 1, &q);
 
   tcpconn_t *c;
-  while (tcp_accept(q, &c) == 0) {
+  while (has_shutdown == true && tcp_accept(q, &c) == 0) {
     if (has_shutdown) {
       master_thread = rt::Thread([c]() { master_fn(c); });
       has_shutdown = false;
-    } else {
-      slave_threads.emplace_back(rt::Thread([c]() { slave_fn(c); }));
     }
   }
 }

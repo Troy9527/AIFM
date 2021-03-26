@@ -81,6 +81,8 @@ namespace far_memory {
 			config.ib_port = port;};
 		uint64_t get_buff_addr(){
 			return reinterpret_cast<uint64_t>(res.buf);}
+		void	set_tcpconn(tcpconn_t *c){
+			remote_master_ = c;}
 		uint64_t set_buff_addr(uint64_t addr, int len);
 		
 		
