@@ -22,6 +22,7 @@ extern "C" {
 
 using namespace far_memory;
 
+RDMAManager manager;
 std::vector<rt::Thread> slave_threads;
 std::unique_ptr<uint8_t> far_mem;
 
@@ -260,26 +261,27 @@ void slave_fn(tcpconn_t *c) {
 }
 
 void master_fn(tcpconn_t *c) {
-  /*uint8_t opcode;
-  helpers::tcp_read_until(c, &opcode, TCPDevice::kOpcodeSize);
-  BUG_ON(opcode != TCPDevice::kOpInit);
-  process_init(c);
-
-  helpers::tcp_read_until(c, &opcode, TCPDevice::kOpcodeSize);
-  BUG_ON(opcode != TCPDevice::kOpShutdown);
-  process_shutdown(c);
-  tcp_close(c);
-  has_shutdown = true;*/
-	RDMAManager manager;
-	manager.set_tcpconn(c);
-	char	a[6], b[6];
-	memset(a, 0, sizeof(a));
-	memset(b, 0, sizeof(b));
-	memcpy(a, "server", 6);
-
-	manager.tcp_sync_data(sizeof(a), a, b);
-	std::cout << b << std::endl;
-  	has_shutdown = true;
+  uint8_t opcode;
+  uint64_t *far_mem_size;
+  uint8_t req[sizeof(decltype(*far_mem_size))];
+  uint8_t ack;
+  char a, b, *buff = reinterpret_cast<char*>(manager.get_buff_addr());
+  
+  memcpy(buff, "IAmServer", 9);
+  manager.set_tcpconn(c);
+  manager.resources_create(16, 128);
+  manager.connect_qp();
+  
+  /*helpers::tcp_read_until(c, &opcode, TCPDevice::kOpcodeSize);*/
+  /*BUG_ON(opcode != TCPDevice::kOpInit);*/
+  
+  /*helpers::tcp_read_until(c, req, sizeof(req));*/
+  
+  /*helpers::tcp_write_until(c, &ack, sizeof(ack));*/
+  
+  manager.tcp_sync_data(1, &a, &b);
+  std::cout << buff << std::endl;
+  has_shutdown = true;
 }
 
 void do_work(uint16_t port) {
@@ -288,10 +290,13 @@ void do_work(uint16_t port) {
   tcp_listen(server_addr, 1, &q);
 
   tcpconn_t *c;
-  while (has_shutdown == true && tcp_accept(q, &c) == 0) {
+  while (tcp_accept(q, &c) == 0) {
     if (has_shutdown) {
       master_thread = rt::Thread([c]() { master_fn(c); });
       has_shutdown = false;
+    } else {
+      /*slave_threads.emplace_back(rt::Thread([c]() { slave_fn(c); }));*/
+      tcp_close(c);
     }
   }
 }

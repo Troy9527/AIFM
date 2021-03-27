@@ -333,18 +333,28 @@ void TCPDevice::_compute(tcpconn_t *remote_slave, uint8_t ds_id, uint8_t opcode,
 
 RDMADevice::RDMADevice(netaddr raddr, uint64_t far_mem_size)
 	: FarMemDevice(far_mem_size, kPrefetchWinSize){
-		char	a[6], b[6];
-		memset(a, 0, sizeof(a));
-		memset(b, 0, sizeof(b));
-		memcpy(a, "client", 6);
-
 		manager_.tcp_connect(raddr);
-		manager_.tcp_sync_data(sizeof(a), a, b);
+		char buff[128];
+
+		assert(manager_.resources_create(16, -1) == 0);
+		assert(manager_.connect_qp() == 0);
+		/* send start signal */
+		manager_.post_send(IBV_WR_RDMA_READ, reinterpret_cast<uint64_t>(buff), 9, 0);
+		manager_.poll_completion();
+		std::cout << buff << std::endl;
+
+		memset(buff, 0, 128);
+		memcpy(buff, "ggin", 4);
+		manager_.post_send(IBV_WR_RDMA_WRITE, reinterpret_cast<uint64_t>(buff), 4, 2);
+		manager_.poll_completion();
+		std::cout << buff << std::endl;
 		
-		std::cout << b << std::endl;
 }
 
-RDMADevice::~RDMADevice(){}
+RDMADevice::~RDMADevice(){
+	manager_.resources_destroy();
+	/*send shutdown signal*/
+}
 
 void RDMADevice::read_object(uint8_t ds_id, uint8_t obj_id_len, const uint8_t *obj_id,
 		uint16_t *data_len, uint8_t *data_buf){}

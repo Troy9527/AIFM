@@ -144,11 +144,11 @@ int RDMAManager::resources_create(int cq_size, int memory_size){
 	int				i, mr_flags = 0, num_devices, rc = 0;
 
 	
-	if(sock_connect() < 0){
-		std::cerr << "sock_connect failed" << std::endl;
-		rc = 1;
-		goto resources_create_exit;
-	}
+	/*if(sock_connect() < 0){*/
+		/*std::cerr << "sock_connect failed" << std::endl;*/
+		/*rc = 1;*/
+		/*goto resources_create_exit;*/
+	/*}*/
 
 
 	/* get device names in the system */
@@ -228,36 +228,29 @@ int RDMAManager::resources_create(int cq_size, int memory_size){
 	
 	
 	/* allocate the memory buffer that will hold the data */
-	res.msize = memory_size;
-	res.buf = (char *)malloc(res.msize);
-	if (!res.buf){
-		fprintf(stderr, "failed to malloc %Zu bytes to memory buffer\n", static_cast<size_t>(res.msize));
-		rc = 1;
-		goto resources_create_exit;
-	}
-	memset(res.buf, 0, res.msize);
-
-	/* only in the server side put the message in the memory buffer */
-	/*if (!config.server_name){*/
-		/*strcpy(res.buf, MSG);*/
-		/*fprintf(stdout, "going to send the message: '%s'\n", res.buf);*/
-	/*}*/
-	/*else*/
-		/*memset(res.buf, 0, res.msize);*/
-	
-	/* register the memory buffer */
-	mr_flags = IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE;
-	res.mr = ibv_reg_mr(res.pd, res.buf, res.msize, mr_flags);
-	if (!res.mr){
-		fprintf(stderr, "ibv_reg_mr failed with mr_flags=0x%x\n", mr_flags);
-		rc = 1;
-		goto resources_create_exit;
-	}
+	if (memory_size != -1){
+		res.msize = memory_size;
+		res.buf = (char *)malloc(res.msize);
+		if (!res.buf){
+			fprintf(stderr, "failed to malloc %Zu bytes to memory buffer\n", static_cast<size_t>(res.msize));
+			rc = 1;
+			goto resources_create_exit;
+		}
+		memset(res.buf, 0, res.msize);
+		
+		/* register the memory buffer */
+		mr_flags = IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE;
+		res.mr = ibv_reg_mr(res.pd, res.buf, res.msize, mr_flags);
+		if (!res.mr){
+			fprintf(stderr, "ibv_reg_mr failed with mr_flags=0x%x\n", mr_flags);
+			rc = 1;
+			goto resources_create_exit;
+		}
 #ifdef DEBUG
-	fprintf(stdout, "MR was registered with addr=%p, lkey=0x%x, rkey=0x%x, flags=0x%x\n",
+		fprintf(stdout, "MR was registered with addr=%p, lkey=0x%x, rkey=0x%x, flags=0x%x\n",
 			res.buf, res.mr->lkey, res.mr->rkey, mr_flags);
 #endif
-
+	}
 	
 	/* create the Queue Pair */
 	memset(&qp_init_attr, 0, sizeof(qp_init_attr));
@@ -310,10 +303,10 @@ resources_create_exit:
 			ibv_free_device_list(dev_list);
 			dev_list = NULL;
 		}
-		if (sockfd >= 0){
-			close(sockfd);
-			sockfd = -1;
-		}
+		/*if (sockfd >= 0){*/
+			/*close(sockfd);*/
+			/*sockfd = -1;*/
+		/*}*/
 	}
 
 	return rc;
@@ -349,11 +342,12 @@ int RDMAManager::connect_qp(void){
 #ifdef DEBUG
 	fprintf(stdout, "\nLocal LID = 0x%x\n", res.port_attr.lid);
 #endif
-	if (sock_sync_data(sizeof(struct cm_con_data_t), (char *)&local_con_data, (char *)&tmp_con_data) < 0){
-		fprintf(stderr, "failed to exchange connection data between sides\n");
-		rc = 1;
-		goto connect_qp_exit;
-	}
+	tcp_sync_data(sizeof(struct cm_con_data_t), (char *)&local_con_data, (char *)&tmp_con_data);
+	/*if (tcp_sync_data(sizeof(struct cm_con_data_t), (char *)&local_con_data, (char *)&tmp_con_data) < 0){*/
+		/*fprintf(stderr, "failed to exchange connection data between sides\n");*/
+		/*rc = 1;*/
+		/*goto connect_qp_exit;*/
+	/*}*/
 
 	remote_con_data.addr = ntohll(tmp_con_data.addr);
 	remote_con_data.rkey = ntohl(tmp_con_data.rkey);
@@ -400,10 +394,7 @@ int RDMAManager::connect_qp(void){
 #endif
 
 	/* sync to make sure that both sides are in states that they can connect to prevent packet loose */
-	if (sock_sync_data(1, t, &temp_char)) /* just send a dummy char back and forth */{
-		fprintf(stderr, "sync error after QPs are were moved to RTS\n");
-		rc = 1;
-	}
+	tcp_sync_data(1, t, &temp_char);
 
 
 connect_qp_exit:
@@ -641,11 +632,11 @@ int RDMAManager::resources_destroy(void){
 			fprintf(stderr, "failed to close device context\n");
 			rc = 1;
 		}
-	if (sockfd >= 0)
-		if (close(sockfd)){
-			fprintf(stderr, "failed to close socket\n");
-			rc = 1;
-		}
+	/*if (sockfd >= 0)*/
+		/*if (close(sockfd)){*/
+			/*fprintf(stderr, "failed to close socket\n");*/
+			/*rc = 1;*/
+		/*}*/
 	
 	tcp_close(remote_master_);
 	return rc;
