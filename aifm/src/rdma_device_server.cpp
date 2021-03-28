@@ -69,83 +69,6 @@ void process_shutdown(tcpconn_t *c) {
 }
 
 // Request:
-// |Opcode = KOpReadObject(1B) | ds_id(1B) | obj_id_len(1B) | obj_id |
-// Response:
-// |data_len(2B)|data_buf(data_len B)|
-void process_read_object(tcpconn_t *c) {
-  uint8_t
-      req[Object::kDSIDSize + Object::kIDLenSize + Object::kMaxObjectIDSize];
-  uint8_t resp[Object::kDataLenSize + Object::kMaxObjectDataSize];
-
-  helpers::tcp_read_until(c, req, Object::kDSIDSize + Object::kIDLenSize);
-  auto ds_id = *const_cast<uint8_t *>(&req[0]);
-  auto object_id_len = *const_cast<uint8_t *>(&req[Object::kDSIDSize]);
-  auto *object_id = &req[Object::kDSIDSize + Object::kIDLenSize];
-  helpers::tcp_read_until(c, object_id, object_id_len);
-
-  auto *data_len = reinterpret_cast<uint16_t *>(&resp);
-  auto *data_buf = &resp[Object::kDataLenSize];
-  server.read_object(ds_id, object_id_len, object_id, data_len, data_buf);
-
-  helpers::tcp_write_until(c, resp, Object::kDataLenSize + *data_len);
-}
-
-// Request:
-// |Opcode = KOpWriteObject (1B)|ds_id(1B)|obj_id_len(1B)|data_len(2B)|
-// |obj_id(obj_id_len B)|data_buf(data_len)|
-// Response:
-// |Ack (1B)|
-void process_write_object(tcpconn_t *c) {
-  uint8_t req[Object::kDSIDSize + Object::kIDLenSize + Object::kDataLenSize +
-              Object::kMaxObjectIDSize + Object::kMaxObjectDataSize];
-
-  helpers::tcp_read_until(
-      c, req, Object::kDSIDSize + Object::kIDLenSize + Object::kDataLenSize);
-
-  auto ds_id = *const_cast<uint8_t *>(&req[0]);
-  auto object_id_len = *const_cast<uint8_t *>(&req[Object::kDSIDSize]);
-  auto data_len = *reinterpret_cast<uint16_t *>(
-      &req[Object::kDSIDSize + Object::kIDLenSize]);
-
-  helpers::tcp_read_until(
-      c, &req[Object::kDSIDSize + Object::kIDLenSize + Object::kDataLenSize],
-      object_id_len + data_len);
-
-  auto *object_id = const_cast<uint8_t *>(
-      &req[Object::kDSIDSize + Object::kIDLenSize + Object::kDataLenSize]);
-  auto *data_buf =
-      const_cast<uint8_t *>(&req[Object::kDSIDSize + Object::kIDLenSize +
-                                 Object::kDataLenSize + object_id_len]);
-
-  server.write_object(ds_id, object_id_len, object_id, data_len, data_buf);
-
-  uint8_t ack;
-  helpers::tcp_write_until(c, &ack, sizeof(ack));
-}
-
-// Request:
-// |Opcode = kOpRemoveObject (1B)|ds_id(1B)|obj_id_len(1B)|obj_id(obj_id_len B)|
-// Response:
-// |exists (1B)|
-void process_remove_object(tcpconn_t *c) {
-  uint8_t
-      req[Object::kDSIDSize + Object::kIDLenSize + Object::kMaxObjectIDSize];
-
-  helpers::tcp_read_until(c, req, Object::kDSIDSize + Object::kIDLenSize);
-  auto ds_id = *const_cast<uint8_t *>(&req[0]);
-  auto obj_id_len = *const_cast<uint8_t *>(&req[Object::kDSIDSize]);
-
-  helpers::tcp_read_until(c, &req[Object::kDSIDSize + Object::kIDLenSize],
-                          obj_id_len);
-
-  auto *obj_id =
-      const_cast<uint8_t *>(&req[Object::kDSIDSize + Object::kIDLenSize]);
-  bool exists = server.remove_object(ds_id, obj_id_len, obj_id);
-
-  helpers::tcp_write_until(c, &exists, sizeof(exists));
-}
-
-// Request:
 // |Opcode = kOpConstruct (1B)|ds_type(1B)|ds_id(1B)|
 // |param_len(1B)|params(param_len B)|
 // Response:
@@ -182,9 +105,9 @@ void process_construct(tcpconn_t *c) {
 void process_destruct(tcpconn_t *c) {
   uint8_t ds_id;
 
-  helpers::tcp_read_until(c, &ds_id, Object::kDSIDSize);
+  /*helpers::tcp_read_until(c, &ds_id, Object::kDSIDSize);*/
 
-  server.destruct(ds_id);
+  /*server.destruct(ds_id);*/
 
   uint8_t ack;
   helpers::tcp_write_until(c, &ack, sizeof(ack));
@@ -236,15 +159,15 @@ void slave_fn(tcpconn_t *c) {
     BUG_ON(ret != RDMADevice::kOpcodeSize);
     switch (opcode) {
     case RDMADevice::kOpConstruct:
-      process_construct(c);
+      /*process_construct(c);*/
       break;
     case RDMADevice::kOpDeconstruct:
-      process_destruct(c);
+      /*process_destruct(c);*/
       break;
     case RDMADevice::kOpCompute:
-      process_compute(c);
+      /*process_compute(c);*/
       break;
-    default:
+    /*default:*/
       BUG();
     }
   }
@@ -280,8 +203,7 @@ void do_work(uint16_t port) {
       master_thread = rt::Thread([c]() { master_fn(c); });
       has_shutdown = false;
     } else {
-      /*slave_threads.emplace_back(rt::Thread([c]() { slave_fn(c); }));*/
-      tcp_close(c);
+      slave_threads.emplace_back(rt::Thread([c]() { slave_fn(c); }));
     }
   }
 }

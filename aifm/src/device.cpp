@@ -363,7 +363,7 @@ RDMADevice::RDMADevice(netaddr raddr, uint32_t num_connections, uint64_t far_mem
 }
 
 RDMADevice::~RDMADevice(){
-	tcpconn_t *remote_master_ = manager_.get_tcpconn();
+	tcpconn_t *remote_masterg = manager_.get_tcpconn();
 	uint8_t ack;
 	/*destruct(kVanillaPtrDSID);*/
 
