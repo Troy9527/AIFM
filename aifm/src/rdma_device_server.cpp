@@ -92,8 +92,10 @@ void process_construct(tcpconn_t *c) {
   params = const_cast<uint8_t *>(
       &req[sizeof(ds_type) + Object::kDSIDSize + sizeof(param_len)]);
 
+  /* register memory region */
   server.construct(ds_type, ds_id, param_len, params);
 
+  /* send addr and rkey to client */
   uint8_t ack;
   helpers::tcp_write_until(c, &ack, sizeof(ack));
 }
@@ -176,15 +178,30 @@ void slave_fn(tcpconn_t *c) {
 
 void master_fn(tcpconn_t *c) {
   uint8_t	opcode;
-  char		a, b, *buff;
   
   manager.set_tcpconn(c);
   manager.resources_create(16, 1);
   manager.connect_qp();
-  
+ 
+  char			a, b, *buff;
+  struct ibv_mr		*mr = NULL;
+  struct mr_data_t	mr_data;
+  buff = reinterpret_cast<char*>(malloc(128));
+  memset(buff, 0, 128);
+  memcpy(buff, "IAMServerFUck", 13);
+  mr = manager.reg_addr(reinterpret_cast<uint64_t>(buff), 128);
+  mr_data.addr = reinterpret_cast<uint64_t>(buff);
+  mr_data.rkey = mr->rkey;
+  mr_data.len = 128;
+
+  helpers::tcp_write_until(c, &mr_data, sizeof(struct mr_data_t));
+
   /* sync by swapping dummy data */
   manager.tcp_sync_data(1, &a, &b);
- 
+  std::cout << buff << std::endl;
+  if(!mr)
+	  ibv_dereg_mr(mr);
+
   /* wait for shutdown command */
   helpers::tcp_read_until(c, &opcode, TCPDevice::kOpcodeSize);
   BUG_ON(opcode != RDMADevice::kOpShutdown);

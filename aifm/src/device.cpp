@@ -334,21 +334,35 @@ void TCPDevice::_compute(tcpconn_t *remote_slave, uint8_t ds_id, uint8_t opcode,
 RDMADevice::RDMADevice(netaddr raddr, uint32_t num_connections, uint64_t far_mem_size)
 	: FarMemDevice(far_mem_size, kPrefetchWinSize), shared_pool_(num_connections){
 		char dev[]="mlx5_0";
-		/*char buff[128], a, b;*/
-		
+
 		manager_.set_dev(dev);
 		manager_.tcp_connect(raddr);
 		BUG_ON(manager_.resources_create(16, 1) != 0);
 		BUG_ON(manager_.connect_qp() != 0);
-		
-		/*manager_.post_send(IBV_WR_RDMA_READ, reinterpret_cast<uint64_t>(buff), 9, 0);*/
-		/*manager_.poll_completion();*/
-		/*std::cout << buff << std::endl;*/
 
-		/*memset(buff, 0, 128);*/
-		/*memcpy(buff, "ggin", 4);*/
-		/*manager_.post_send(IBV_WR_RDMA_WRITE, reinterpret_cast<uint64_t>(buff), 4, 2);*/
-		/*manager_.poll_completion();*/
+		
+		char buff[128], a, b;
+		struct ibv_mr	*mr;
+		struct mr_data_t remote_mr;
+		tcpconn_t *remote_master_ = manager_.get_tcpconn();
+
+		mr = manager_.reg_addr(reinterpret_cast<uint64_t>(buff), 128);
+		helpers::tcp_read_until(remote_master_, &remote_mr, sizeof(struct mr_data_t));
+		
+		manager_.post_send(IBV_WR_RDMA_READ, reinterpret_cast<uint64_t>(buff), 9
+				, mr->lkey, remote_mr, 0);
+		manager_.poll_completion();
+		std::cout << buff << std::endl;
+
+		memset(buff, 0, 128);
+		memcpy(buff, "ggin", 4);
+		manager_.post_send(IBV_WR_RDMA_WRITE, reinterpret_cast<uint64_t>(buff), 4
+				, mr->lkey, remote_mr, 2);
+		manager_.poll_completion();
+		manager_.tcp_sync_data(1, &a, &b);
+		if(!mr)
+			ibv_dereg_mr(mr);
+
 
 		// Initialize slave connections.
 		tcpconn_t *remote_slave;
@@ -363,7 +377,7 @@ RDMADevice::RDMADevice(netaddr raddr, uint32_t num_connections, uint64_t far_mem
 }
 
 RDMADevice::~RDMADevice(){
-	tcpconn_t *remote_masterg = manager_.get_tcpconn();
+	tcpconn_t *remote_master_ = manager_.get_tcpconn();
 	uint8_t ack;
 	/*destruct(kVanillaPtrDSID);*/
 
@@ -383,12 +397,52 @@ void RDMADevice::write_object(uint8_t ds_id, uint8_t obj_id_len, const uint8_t *
 bool RDMADevice::remove_object(uint64_t ds_id, uint8_t obj_id_len, const uint8_t *obj_id){}
 
 void RDMADevice::construct(uint8_t ds_type, uint8_t ds_id, uint8_t param_len, 
-		uint8_t *params){}
+		uint8_t *params){
+	auto remote_slave = shared_pool_.pop();
+	_construct(remote_slave, ds_type, ds_id, param_len, params);
+	shared_pool_.push(remote_slave);
+}
 
-void RDMADevice::destruct(uint8_t ds_id){}
+void RDMADevice::destruct(uint8_t ds_id){
+	auto remote_slave = shared_pool_.pop();
+	_destruct(remote_slave, ds_id);
+	shared_pool_.push(remote_slave);
+}
 
 void RDMADevice::compute(uint8_t ds_id, uint8_t opcode, uint16_t input_len,
 		const uint8_t *input_buf, uint16_t *output_len,
 		uint8_t *output_buf){}
+
+/* Request:
+ * |Opcode = kOpConstruct (1B)|ds_type(1B)|ds_id(1B)|
+ * |param_len(1B)|params(param_len B)|
+ * Response:
+ * |Ack (1B)|
+ */
+void RDMADevice::_construct(tcpconn_t *remote_slave, uint8_t ds_type, uint8_t ds_id, uint8_t param_len,
+		uint8_t *params){
+	uint8_t req[kOpcodeSize + sizeof(ds_type) + Object::kDSIDSize 
+		+ sizeof(param_len) + std::numeric_limits<decltype(param_len)>::max()];
+
+__builtin_memcpy(&req[0], &kOpConstruct, sizeof(kOpConstruct));
+__builtin_memcpy(&req[kOpcodeSize], &ds_type, sizeof(ds_type));
+__builtin_memcpy(&req[kOpcodeSize + sizeof(ds_type)], &ds_id,
+                 Object::kDSIDSize);
+__builtin_memcpy(&req[kOpcodeSize + sizeof(ds_type) + Object::kDSIDSize],
+                 &param_len, sizeof(param_len));
+
+memcpy(&req[kOpcodeSize + sizeof(ds_type) + Object::kDSIDSize +
+            sizeof(param_len)],
+       params, param_len);
+helpers::tcp_write_until(remote_slave, req,
+                         kOpcodeSize + sizeof(ds_type) + Object::kDSIDSize +
+                             sizeof(param_len) + param_len);
+
+uint8_t ack;
+helpers::tcp_read_until(remote_slave, &ack, sizeof(ack));
+}
+
+void RDMADevice::_destruct(tcpconn_t *remote_slave, uint8_t ds_id){
+}
 
 } // namespace far_memory

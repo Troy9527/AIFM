@@ -153,6 +153,9 @@ public:
   void construct(uint8_t ds_type, uint8_t ds_id, uint8_t param_len,
                  uint8_t *params);
   void destruct(uint8_t ds_id);
+  void _construct(tcpconn_t *remote_slave, uint8_t ds_type, uint8_t ds_id, uint8_t param_len,
+                 uint8_t *params);
+  void _destruct(tcpconn_t *remote_slave, uint8_t ds_id);
   void compute(uint8_t ds_id, uint8_t opcode, uint16_t input_len,
                const uint8_t *input_buf, uint16_t *output_len,
                uint8_t *output_buf);

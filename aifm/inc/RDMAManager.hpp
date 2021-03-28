@@ -33,11 +33,17 @@ namespace far_memory {
 	/* structure to exchange data which is needed to connect the QPs */
 	struct cm_con_data_t
 	{
-		uint64_t	addr;		/* Buffer address */
-		uint32_t	rkey;		/* Remote key */
 		uint32_t	qp_num;		/* QP number */
 		uint16_t	lid;		/* LID of the IB port */
 		uint8_t		gid[16]; 	/* gid */
+	} __attribute__((packed));
+
+	/* structure to exchange memory region data */
+	struct mr_data_t
+	{
+		uint64_t	addr;		/* Buffer address */
+		uint32_t	rkey;		/* Remote key */
+		size_t		len;		/* buffer length */
 	} __attribute__((packed));
 
 	/* structure of system resources */
@@ -79,13 +85,13 @@ namespace far_memory {
 			config.dev_name = dev;};
 		void	set_ib_port(int port){
 			config.ib_port = port;};
-		uint64_t get_buff_addr(){
-			return reinterpret_cast<uint64_t>(res.buf);}
+		/*uint64_t get_buff_addr(){*/
+			/*return reinterpret_cast<uint64_t>(res.buf);}*/
 		void	set_tcpconn(tcpconn_t *c){
 			remote_master_ = c;}
 		tcpconn_t* get_tcpconn(void){
 			return remote_master_;}
-		uint64_t set_buff_addr(uint64_t addr, int len);
+		struct ibv_mr* reg_addr(uint64_t addr, int len);
 		
 		
 		void	tcp_connect(netaddr raddr);
@@ -101,8 +107,9 @@ namespace far_memory {
 		int	modify_qp_to_rtr(struct ibv_qp *qp, uint32_t remote_qpn, uint16_t dlid, uint8_t *dgid);
 		int	modify_qp_to_rts(struct ibv_qp *qp);
 	
-		int	post_send(int opcode, uint64_t local_addr, int len, int remote_addr_offset);
-		int	post_receive(uintptr_t addr, int len);
+		int	post_send(int opcode, uint64_t local_addr, int len, uint32_t lkey
+				, struct mr_data_t remote_mr, int remote_addr_offset);
+		int	post_receive(uintptr_t addr, int len, uint32_t lkey);
 		int	poll_completion(void);
 	};
 }

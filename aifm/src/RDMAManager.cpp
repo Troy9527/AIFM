@@ -231,7 +231,7 @@ int RDMAManager::resources_create(int cq_size, int memory_size){
 	
 	
 	/* allocate the memory buffer that will hold the data */
-	if (memory_size != -1){
+	/*if (memory_size != -1){
 		res.msize = memory_size;
 		res.buf = (char *)malloc(res.msize);
 		if (!res.buf){
@@ -241,7 +241,6 @@ int RDMAManager::resources_create(int cq_size, int memory_size){
 		}
 		memset(res.buf, 0, res.msize);
 		
-		/* register the memory buffer */
 		mr_flags = IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE;
 		res.mr = ibv_reg_mr(res.pd, res.buf, res.msize, mr_flags);
 		if (!res.mr){
@@ -253,7 +252,7 @@ int RDMAManager::resources_create(int cq_size, int memory_size){
 		fprintf(stdout, "MR was registered with addr=%p, lkey=0x%x, rkey=0x%x, flags=0x%x\n",
 			res.buf, res.mr->lkey, res.mr->rkey, mr_flags);
 #endif
-	}
+	}*/
 	
 	/* create the Queue Pair */
 	memset(&qp_init_attr, 0, sizeof(qp_init_attr));
@@ -282,14 +281,14 @@ resources_create_exit:
 			ibv_destroy_qp(res.qp);
 			res.qp = NULL;
 		}
-		if (res.mr){
-			ibv_dereg_mr(res.mr);
-			res.mr = NULL;
-		}
-		if (res.buf){
-			free(res.buf);
-			res.buf = NULL;
-		}
+		/*if (res.mr){*/
+			/*ibv_dereg_mr(res.mr);*/
+			/*res.mr = NULL;*/
+		/*}*/
+		/*if (res.buf){*/
+			/*free(res.buf);*/
+			/*res.buf = NULL;*/
+		/*}*/
 		if (res.cq){
 			ibv_destroy_cq(res.cq);
 			res.cq = NULL;
@@ -337,8 +336,8 @@ int RDMAManager::connect_qp(void){
 
 	
 	/* exchange using TCP sockets info required to connect QPs */
-	local_con_data.addr = htonll((uintptr_t)res.buf);
-	local_con_data.rkey = htonl(res.mr->rkey);
+	/*local_con_data.addr = htonll((uintptr_t)res.buf);*/
+	/*local_con_data.rkey = htonl(res.mr->rkey);*/
 	local_con_data.qp_num = htonl(res.qp->qp_num);
 	local_con_data.lid = htons(res.port_attr.lid);
 	memcpy(local_con_data.gid, &my_gid, 16);
@@ -352,8 +351,8 @@ int RDMAManager::connect_qp(void){
 		/*goto connect_qp_exit;*/
 	/*}*/
 
-	remote_con_data.addr = ntohll(tmp_con_data.addr);
-	remote_con_data.rkey = ntohl(tmp_con_data.rkey);
+	/*remote_con_data.addr = ntohll(tmp_con_data.addr);*/
+	/*remote_con_data.rkey = ntohl(tmp_con_data.rkey);*/
 	remote_con_data.qp_num = ntohl(tmp_con_data.qp_num);
 	remote_con_data.lid = ntohs(tmp_con_data.lid);
 	memcpy(remote_con_data.gid, tmp_con_data.gid, 16);
@@ -361,8 +360,8 @@ int RDMAManager::connect_qp(void){
 	/* save the remote side attributes, we will need it for the post SR */
 	res.remote_props = remote_con_data;
 #ifdef DEBUG
-	fprintf(stdout, "Remote address = 0x%" PRIx64 "\n", remote_con_data.addr);
-	fprintf(stdout, "Remote rkey = 0x%x\n", remote_con_data.rkey);
+	/*fprintf(stdout, "Remote address = 0x%" PRIx64 "\n", remote_con_data.addr);*/
+	/*fprintf(stdout, "Remote rkey = 0x%x\n", remote_con_data.rkey);*/
 	fprintf(stdout, "Remote QP number = 0x%x\n", remote_con_data.qp_num);
 	fprintf(stdout, "Remote LID = 0x%x\n", remote_con_data.lid);
 	if (config.gid_idx >= 0){
@@ -480,7 +479,8 @@ int RDMAManager::modify_qp_to_rts(struct ibv_qp *qp){
 }
 
 
-int RDMAManager::post_send(int opcode, uint64_t local_addr, int len, int remote_addr_offset){
+int RDMAManager::post_send(int opcode, uint64_t local_addr, int len, uint32_t lkey
+		, struct mr_data_t remote_mr, int remote_addr_offset){
 	struct ibv_send_wr	sr;
 	struct ibv_sge		sge;
 	struct ibv_send_wr	*bad_wr = NULL;
@@ -490,7 +490,7 @@ int RDMAManager::post_send(int opcode, uint64_t local_addr, int len, int remote_
 	memset(&sge, 0, sizeof(sge));
 	sge.addr = (uintptr_t)local_addr;
 	sge.length = len;
-	sge.lkey = res.mr->lkey;
+	sge.lkey = lkey;
 	
 	/* prepare the send work request */
 	memset(&sr, 0, sizeof(sr));
@@ -501,8 +501,8 @@ int RDMAManager::post_send(int opcode, uint64_t local_addr, int len, int remote_
 	sr.opcode = static_cast<ibv_wr_opcode>(opcode);
 	sr.send_flags = IBV_SEND_SIGNALED;
 	if (opcode != IBV_WR_SEND){
-		sr.wr.rdma.remote_addr = res.remote_props.addr + remote_addr_offset;
-		sr.wr.rdma.rkey = res.remote_props.rkey;
+		sr.wr.rdma.remote_addr = remote_mr.addr + remote_addr_offset;
+		sr.wr.rdma.rkey = remote_mr.rkey;
 	}
 	
 	/* there is a Receive Request in the responder side, so we won't get any into RNR flow */
@@ -536,7 +536,7 @@ int RDMAManager::post_send(int opcode, uint64_t local_addr, int len, int remote_
 	return rc;
 }
 
-int RDMAManager::post_receive(uintptr_t addr, int len){
+int RDMAManager::post_receive(uintptr_t addr, int len, uint32_t lkey){
 	struct ibv_recv_wr	rr;
 	struct ibv_sge		sge;
 	struct ibv_recv_wr	*bad_wr;
@@ -546,7 +546,7 @@ int RDMAManager::post_receive(uintptr_t addr, int len){
 	memset(&sge, 0, sizeof(sge));
 	sge.addr = (uintptr_t)addr;
 	sge.length = len;
-	sge.lkey = res.mr->lkey;
+	sge.lkey = lkey;
 	
 	/* prepare the receive work request */
 	memset(&rr, 0, sizeof(rr));
@@ -613,13 +613,13 @@ int RDMAManager::resources_destroy(void){
 			fprintf(stderr, "failed to destroy QP\n");
 			rc = 1;
 		}
-	if (res.mr)
-		if (ibv_dereg_mr(res.mr)){
-			fprintf(stderr, "failed to deregister MR\n");
-			rc = 1;
-		}
-	if (res.buf)
-		free(res.buf);
+	/*if (res.mr)*/
+		/*if (ibv_dereg_mr(res.mr)){*/
+			/*fprintf(stderr, "failed to deregister MR\n");*/
+			/*rc = 1;*/
+		/*}*/
+	/*if (res.buf)*/
+		/*free(res.buf);*/
 	if (res.cq)
 		if (ibv_destroy_cq(res.cq)){
 			fprintf(stderr, "failed to destroy CQ\n");
@@ -645,30 +645,24 @@ int RDMAManager::resources_destroy(void){
 	return rc;
 }
 
-uint64_t RDMAManager::set_buff_addr(uint64_t addr, int len){
-	int	mr_flags = 0;
+struct ibv_mr* RDMAManager::reg_addr(uint64_t addr, int len){
+	struct ibv_mr	*ret = NULL;
+	int		mr_flags = 0;
 	
-	if (res.mr){
-		ibv_dereg_mr(res.mr);
-		res.mr = NULL;
-	}
-	
-	res.buf = reinterpret_cast<char*>(addr);
-	res.msize = len;
 
 	mr_flags = IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE;
-	res.mr = ibv_reg_mr(res.pd, res.buf, res.msize, mr_flags);
-	if (!res.mr){
+	ret = ibv_reg_mr(res.pd, reinterpret_cast<char*>(addr), len, mr_flags);
+	if (!ret){
 		fprintf(stderr, "ibv_reg_mr failed with mr_flags=0x%x\n", mr_flags);
-		return -1;
+		return NULL;
 	}
 #ifdef DEBUG
 	fprintf(stdout, "MR was registered with addr=%p, lkey=0x%x, rkey=0x%x, flags=0x%x\n",
-			res.buf, res.mr->lkey, res.mr->rkey, mr_flags);
+			ret->addr, ret->lkey, ret->rkey, mr_flags);
 #endif
 
 	
-	return	addr;
+	return	ret;
 
 }
 
