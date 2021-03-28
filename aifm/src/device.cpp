@@ -333,7 +333,7 @@ void TCPDevice::_compute(tcpconn_t *remote_slave, uint8_t ds_id, uint8_t opcode,
 
 RDMADevice::RDMADevice(netaddr raddr, uint32_t num_connections, uint64_t far_mem_size)
 	: FarMemDevice(far_mem_size, kPrefetchWinSize), shared_pool_(num_connections){
-		char dev[]="mlx5_0";
+		char dev[]="mlx5_1";
 
 		manager_.set_dev(dev);
 		manager_.tcp_connect(raddr);
