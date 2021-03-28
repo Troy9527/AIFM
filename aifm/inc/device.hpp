@@ -142,7 +142,7 @@ public:
   constexpr static uint8_t kOpDeconstruct = 6;
   constexpr static uint8_t kOpCompute = 7;
   
-  RDMADevice(netaddr raddr, uint64_t far_mem_size);
+  RDMADevice(netaddr raddr, uint32_t num_connections, uint64_t far_mem_size);
   ~RDMADevice();
   void read_object(uint8_t ds_id, uint8_t obj_id_len, const uint8_t *obj_id,
                    uint16_t *data_len, uint8_t *data_buf);

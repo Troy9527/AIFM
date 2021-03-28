@@ -265,11 +265,12 @@ void master_fn(tcpconn_t *c) {
   uint64_t *far_mem_size;
   uint8_t req[sizeof(decltype(*far_mem_size))];
   uint8_t ack;
-  char a, b, *buff = reinterpret_cast<char*>(manager.get_buff_addr());
   
-  memcpy(buff, "IAmServer", 9);
   manager.set_tcpconn(c);
-  manager.resources_create(16, 128);
+  manager.resources_create(1, 128);
+  
+  char a, b, *buff = reinterpret_cast<char*>(manager.get_buff_addr());
+  memcpy(buff, "IAmServer", 9);
   manager.connect_qp();
   
   /*helpers::tcp_read_until(c, &opcode, TCPDevice::kOpcodeSize);*/

@@ -13,6 +13,9 @@ extern "C" {
 
 #include "RDMAManager.hpp"
 #include "helpers.hpp"
+#ifndef DEBUG
+#define DEBUG 1
+#endif
 
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 static inline uint64_t htonll(uint64_t x) { return bswap_64(x); }

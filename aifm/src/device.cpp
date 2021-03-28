@@ -331,13 +331,15 @@ void TCPDevice::_compute(tcpconn_t *remote_slave, uint8_t ds_id, uint8_t opcode,
   }
 }
 
-RDMADevice::RDMADevice(netaddr raddr, uint64_t far_mem_size)
+RDMADevice::RDMADevice(netaddr raddr, uint32_t num_connections, uint64_t far_mem_size)
 	: FarMemDevice(far_mem_size, kPrefetchWinSize){
 		manager_.tcp_connect(raddr);
-		char buff[128];
+		char dev[]="mlx5_0";
+		char buff[128], a, b;
 
-		assert(manager_.resources_create(16, -1) == 0);
-		assert(manager_.connect_qp() == 0);
+		manager_.set_dev(dev);
+		BUG_ON(manager_.resources_create(16, 1) != 0);
+		BUG_ON(manager_.connect_qp() != 0);
 		/* send start signal */
 		manager_.post_send(IBV_WR_RDMA_READ, reinterpret_cast<uint64_t>(buff), 9, 0);
 		manager_.poll_completion();
@@ -347,12 +349,11 @@ RDMADevice::RDMADevice(netaddr raddr, uint64_t far_mem_size)
 		memcpy(buff, "ggin", 4);
 		manager_.post_send(IBV_WR_RDMA_WRITE, reinterpret_cast<uint64_t>(buff), 4, 2);
 		manager_.poll_completion();
-		std::cout << buff << std::endl;
-		
+	
+		manager_.tcp_sync_data(1, &a, &b);
 }
 
 RDMADevice::~RDMADevice(){
-	manager_.resources_destroy();
 	/*send shutdown signal*/
 }
 

@@ -66,7 +66,7 @@ namespace far_memory {
 		/*RDMAManager():sockfd(0), config.dev_name(NULL), config.server_name(NULL), config.tcp_port(19875), config.gid_idx(0);*/
 		RDMAManager(char* servername, char* devname, int port, int ibport, int gid_idx);
 		RDMAManager():sockfd(-1){
-			config.dev_name =	NULL;
+			config.dev_name =	"mlx5_0";
 			config.server_name =	NULL;
 			config.tcp_port =	19785;
 			config.ib_port =	1;
