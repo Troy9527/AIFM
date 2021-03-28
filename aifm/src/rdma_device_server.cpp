@@ -232,25 +232,16 @@ void slave_fn(tcpconn_t *c) {
   // Run event loop.
   uint8_t opcode;
   int ret;
-  while ((ret = tcp_read(c, &opcode, TCPDevice::kOpcodeSize)) > 0) {
-    BUG_ON(ret != TCPDevice::kOpcodeSize);
+  while ((ret = tcp_read(c, &opcode, RDMADevice::kOpcodeSize)) > 0) {
+    BUG_ON(ret != RDMADevice::kOpcodeSize);
     switch (opcode) {
-    case TCPDevice::kOpReadObject:
-      process_read_object(c);
-      break;
-    case TCPDevice::kOpWriteObject:
-      process_write_object(c);
-      break;
-    case TCPDevice::kOpRemoveObject:
-      process_remove_object(c);
-      break;
-    case TCPDevice::kOpConstruct:
+    case RDMADevice::kOpConstruct:
       process_construct(c);
       break;
-    case TCPDevice::kOpDeconstruct:
+    case RDMADevice::kOpDeconstruct:
       process_destruct(c);
       break;
-    case TCPDevice::kOpCompute:
+    case RDMADevice::kOpCompute:
       process_compute(c);
       break;
     default:
@@ -261,27 +252,20 @@ void slave_fn(tcpconn_t *c) {
 }
 
 void master_fn(tcpconn_t *c) {
-  uint8_t opcode;
-  uint64_t *far_mem_size;
-  uint8_t req[sizeof(decltype(*far_mem_size))];
-  uint8_t ack;
+  uint8_t	opcode;
+  char		a, b, *buff;
   
   manager.set_tcpconn(c);
-  manager.resources_create(1, 128);
-  
-  char a, b, *buff = reinterpret_cast<char*>(manager.get_buff_addr());
-  memcpy(buff, "IAmServer", 9);
+  manager.resources_create(16, 1);
   manager.connect_qp();
   
-  /*helpers::tcp_read_until(c, &opcode, TCPDevice::kOpcodeSize);*/
-  /*BUG_ON(opcode != TCPDevice::kOpInit);*/
-  
-  /*helpers::tcp_read_until(c, req, sizeof(req));*/
-  
-  /*helpers::tcp_write_until(c, &ack, sizeof(ack));*/
-  
+  /* sync by swapping dummy data */
   manager.tcp_sync_data(1, &a, &b);
-  std::cout << buff << std::endl;
+ 
+  /* wait for shutdown command */
+  helpers::tcp_read_until(c, &opcode, TCPDevice::kOpcodeSize);
+  BUG_ON(opcode != RDMADevice::kOpShutdown);
+  process_shutdown(c);
   has_shutdown = true;
 }
 

@@ -126,6 +126,7 @@ private:
   constexpr static uint32_t	kPrefetchWinSize = 1 << 20;
   Server			server_;
   RDMAManager			manager_;
+  SharedPool<tcpconn_t *>	shared_pool_;
 
 public:
   constexpr static uint32_t kOpcodeSize = 1;

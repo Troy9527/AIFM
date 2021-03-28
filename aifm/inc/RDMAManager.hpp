@@ -83,7 +83,7 @@ namespace far_memory {
 			return reinterpret_cast<uint64_t>(res.buf);}
 		void	set_tcpconn(tcpconn_t *c){
 			remote_master_ = c;}
-		tcpconn_t* get_tcpconn(tcpconn_t *c){
+		tcpconn_t* get_tcpconn(void){
 			return remote_master_;}
 		uint64_t set_buff_addr(uint64_t addr, int len);
 		

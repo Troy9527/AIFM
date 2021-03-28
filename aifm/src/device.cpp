@@ -332,29 +332,46 @@ void TCPDevice::_compute(tcpconn_t *remote_slave, uint8_t ds_id, uint8_t opcode,
 }
 
 RDMADevice::RDMADevice(netaddr raddr, uint32_t num_connections, uint64_t far_mem_size)
-	: FarMemDevice(far_mem_size, kPrefetchWinSize){
-		manager_.tcp_connect(raddr);
+	: FarMemDevice(far_mem_size, kPrefetchWinSize), shared_pool_(num_connections){
 		char dev[]="mlx5_0";
-		char buff[128], a, b;
-
+		/*char buff[128], a, b;*/
+		
 		manager_.set_dev(dev);
+		manager_.tcp_connect(raddr);
 		BUG_ON(manager_.resources_create(16, 1) != 0);
 		BUG_ON(manager_.connect_qp() != 0);
-		/* send start signal */
-		manager_.post_send(IBV_WR_RDMA_READ, reinterpret_cast<uint64_t>(buff), 9, 0);
-		manager_.poll_completion();
-		std::cout << buff << std::endl;
+		
+		/*manager_.post_send(IBV_WR_RDMA_READ, reinterpret_cast<uint64_t>(buff), 9, 0);*/
+		/*manager_.poll_completion();*/
+		/*std::cout << buff << std::endl;*/
 
-		memset(buff, 0, 128);
-		memcpy(buff, "ggin", 4);
-		manager_.post_send(IBV_WR_RDMA_WRITE, reinterpret_cast<uint64_t>(buff), 4, 2);
-		manager_.poll_completion();
-	
-		manager_.tcp_sync_data(1, &a, &b);
+		/*memset(buff, 0, 128);*/
+		/*memcpy(buff, "ggin", 4);*/
+		/*manager_.post_send(IBV_WR_RDMA_WRITE, reinterpret_cast<uint64_t>(buff), 4, 2);*/
+		/*manager_.poll_completion();*/
+
+		// Initialize slave connections.
+		tcpconn_t *remote_slave;
+		netaddr laddr = {.ip = MAKE_IP_ADDR(0, 0, 0, 0), .port = 0};
+		for (uint32_t i = 0; i < num_connections; i++) {
+			BUG_ON(tcp_dial(laddr, raddr, &remote_slave) != 0);
+			shared_pool_.push(remote_slave);
+		}
+
+		/*construct(kVanillaPtrDSType, kVanillaPtrDSID, sizeof(far_mem_size),*/
+			/*reinterpret_cast<uint8_t *>(&far_mem_size));*/
 }
 
 RDMADevice::~RDMADevice(){
+	tcpconn_t *remote_master_ = manager_.get_tcpconn();
+	uint8_t ack;
+	/*destruct(kVanillaPtrDSID);*/
+
 	/*send shutdown signal*/
+	helpers::tcp_write_until(remote_master_, &kOpShutdown, kOpcodeSize);
+	helpers::tcp_read_until(remote_master_, &ack, sizeof(ack));
+	/*tcp_close(remote_master_);*/
+	shared_pool_.for_each([&](auto remote_slave) { tcp_close(remote_slave); });
 }
 
 void RDMADevice::read_object(uint8_t ds_id, uint8_t obj_id_len, const uint8_t *obj_id,
