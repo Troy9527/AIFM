@@ -14,6 +14,7 @@ extern "C" {
 
 #include <atomic>
 #include <cstdlib>
+#include <cstdio>
 #include <cstring>
 #include <iostream>
 #include <limits>
@@ -53,6 +54,8 @@ void process_shutdown(tcpconn_t *c) {
 // Response:
 // |Ack (1B)|
 void process_construct(tcpconn_t *c) {
+	std::cout << "construct" << std::endl;
+
   uint8_t ds_type;
   uint8_t ds_id;
   uint8_t param_len;
@@ -84,9 +87,12 @@ void process_construct(tcpconn_t *c) {
     BUG_ON(param_len != sizeof(decltype(size)));
     size = *(reinterpret_cast<decltype(size) *>(params));
     buff = reinterpret_cast<char*>(malloc(size));
+    fprintf(stdout, "size: %ld\n", size);
     /*memset(buff, 0, size);*/
     /*memcpy(buff, "IAMServerFUck", 13);*/
     mr = manager.reg_addr(reinterpret_cast<uint64_t>(buff), size);
+    if(mr == NULL)
+      std::cerr << "reg addr return NULL" << std::endl;
 
     server_mr[ds_id] = mr;
   }
@@ -176,15 +182,15 @@ void slave_fn(tcpconn_t *c) {
     BUG_ON(ret != RDMADevice::kOpcodeSize);
     switch (opcode) {
     case RDMADevice::kOpConstruct:
-      /*process_construct(c);*/
+      process_construct(c);
       break;
     case RDMADevice::kOpDeconstruct:
-      /*process_destruct(c);*/
+      process_destruct(c);
       break;
     case RDMADevice::kOpCompute:
       /*process_compute(c);*/
       break;
-    /*default:*/
+    default:
       BUG();
     }
   }
@@ -222,8 +228,10 @@ void master_fn(tcpconn_t *c) {
   struct ibv_mr	*mr;
   manager.tcp_sync_data(1, &a, &b);
   map<uint8_t, struct ibv_mr*>::iterator	iter;
+
   iter = server_mr.find(0);
   if(iter != server_mr.end()){
+    mr = iter->second;
     char *buff = reinterpret_cast<char*>(mr->addr);
     memset(buff, 0, 128);
     memcpy(buff, "IAMServerfuck", 13);
