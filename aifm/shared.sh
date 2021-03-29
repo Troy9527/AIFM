@@ -70,11 +70,25 @@ function kill_mem_server {
     ssh_kill_process tcp_device_serv
 }
 
+function kill_rdma_server {
+    ssh_kill_process iokerneld
+    ssh_kill_process rdma_device_serv
+}
+
 function run_mem_server {
     ssh_execute "sudo $SHENANGO_PATH/iokerneld simple" > /dev/null 2>&1 &
     sleep 3
     ssh_execute_tty "sudo sh -c 'ulimit -s $MEM_SERVER_STACK_KB; \
                      $AIFM_PATH/bin/tcp_device_server $AIFM_PATH/configs/server.config \
+                     $MEM_SERVER_PORT'" > /dev/null 2>&1 &
+    sleep 3
+}
+
+function run_rdma_server {
+    ssh_execute "sudo $SHENANGO_PATH/iokerneld simple" > /dev/null 2>&1 &
+    sleep 3
+    ssh_execute_tty "sudo sh -c 'ulimit -s $MEM_SERVER_STACK_KB; \
+                     $AIFM_PATH/bin/rdma_device_server $AIFM_PATH/configs/server.config \
                      $MEM_SERVER_PORT'" > /dev/null 2>&1 &
     sleep 3
 }
