@@ -19,46 +19,25 @@ extern "C" {
 #include <limits>
 #include <memory>
 #include <vector>
+#include <map>
 
 using namespace far_memory;
+using namespace std;
 
 RDMAManager manager;
 std::vector<rt::Thread> slave_threads;
-std::unique_ptr<uint8_t> far_mem;
 
 std::atomic<bool> has_shutdown{true};
 rt::Thread master_thread;
 Server server;
+map<uint8_t, struct ibv_mr*>	server_mr;
 
-// Request:
-//     |OpCode = Init (1B)|Far Mem Size (8B)|
-// Response:
-//     |Ack (1B)|
-void process_init(tcpconn_t *c) {
-  uint64_t *far_mem_size;
-  uint8_t req[sizeof(decltype(*far_mem_size))];
-  helpers::tcp_read_until(c, req, sizeof(req));
-
-  far_mem_size = reinterpret_cast<uint64_t *>(req);
-  *far_mem_size = ((*far_mem_size - 1) / helpers::kHugepageSize + 1) *
-                  helpers::kHugepageSize;
-  auto far_mem_ptr =
-      static_cast<uint8_t *>(helpers::allocate_hugepage(*far_mem_size));
-  BUG_ON(far_mem_ptr == nullptr);
-  far_mem.reset(far_mem_ptr);
-
-  barrier();
-  uint8_t ack;
-  helpers::tcp_write_until(c, &ack, sizeof(ack));
-}
 
 // Request:
 //     |Opcode = Shutdown (1B)|
 // Response:
 //     |Ack (1B)|
 void process_shutdown(tcpconn_t *c) {
-  far_mem.reset();
-
   uint8_t ack;
   helpers::tcp_write_until(c, &ack, sizeof(ack));
 
@@ -92,12 +71,35 @@ void process_construct(tcpconn_t *c) {
   params = const_cast<uint8_t *>(
       &req[sizeof(ds_type) + Object::kDSIDSize + sizeof(param_len)]);
 
+  /* TODO: handle different ds_type, currently only support pointer */
   /* register memory region */
-  server.construct(ds_type, ds_id, param_len, params);
+  struct ibv_mr	*mr = NULL;
+  map<uint8_t, struct ibv_mr*>::iterator	iter;
+  iter = server_mr.find(ds_id);
+  
+  if(iter == server_mr.end()){
+    char		*buff;
+    uint64_t		size;
 
-  /* send addr and rkey to client */
-  uint8_t ack;
-  helpers::tcp_write_until(c, &ack, sizeof(ack));
+    BUG_ON(param_len != sizeof(decltype(size)));
+    size = *(reinterpret_cast<decltype(size) *>(params));
+    buff = reinterpret_cast<char*>(malloc(size));
+    /*memset(buff, 0, size);*/
+    /*memcpy(buff, "IAMServerFUck", 13);*/
+    mr = manager.reg_addr(reinterpret_cast<uint64_t>(buff), size);
+
+    server_mr[ds_id] = mr;
+  }
+  else{
+    mr = iter->second;
+  }
+
+  struct mr_data_t	mr_data;
+  mr_data.addr = reinterpret_cast<uint64_t>(mr->addr);
+  mr_data.rkey = mr->rkey;
+  mr_data.len = mr->length;
+
+  helpers::tcp_write_until(c, &mr_data, sizeof(struct mr_data_t));
 }
 
 // Request:
@@ -107,9 +109,20 @@ void process_construct(tcpconn_t *c) {
 void process_destruct(tcpconn_t *c) {
   uint8_t ds_id;
 
-  /*helpers::tcp_read_until(c, &ds_id, Object::kDSIDSize);*/
+  helpers::tcp_read_until(c, &ds_id, Object::kDSIDSize);
 
-  /*server.destruct(ds_id);*/
+  /* deregister memory region according ds_id */
+  struct ibv_mr	*mr = NULL;
+  map<uint8_t, struct ibv_mr*>::iterator	iter;
+  iter = server_mr.find(ds_id);
+  
+  if(iter != server_mr.end()){
+    mr = iter->second;
+    server_mr.erase(ds_id);
+
+    if(ibv_dereg_mr(mr))
+      cerr << "ibv_dereg_mr failed" << endl;
+  }
 
   uint8_t ack;
   helpers::tcp_write_until(c, &ack, sizeof(ack));
@@ -182,7 +195,8 @@ void master_fn(tcpconn_t *c) {
   manager.set_tcpconn(c);
   manager.resources_create(16, 1);
   manager.connect_qp();
- 
+
+  /*
   char			a, b, *buff;
   struct ibv_mr		*mr = NULL;
   struct mr_data_t	mr_data;
@@ -196,11 +210,10 @@ void master_fn(tcpconn_t *c) {
 
   helpers::tcp_write_until(c, &mr_data, sizeof(struct mr_data_t));
 
-  /* sync by swapping dummy data */
   manager.tcp_sync_data(1, &a, &b);
   std::cout << buff << std::endl;
-  if(!mr)
-	  ibv_dereg_mr(mr);
+  if(mr)
+	  ibv_dereg_mr(mr);*/
 
   /* wait for shutdown command */
   helpers::tcp_read_until(c, &opcode, TCPDevice::kOpcodeSize);

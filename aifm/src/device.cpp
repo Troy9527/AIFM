@@ -340,7 +340,7 @@ RDMADevice::RDMADevice(netaddr raddr, uint32_t num_connections, uint64_t far_mem
 		BUG_ON(manager_.resources_create(16, 1) != 0);
 		BUG_ON(manager_.connect_qp() != 0);
 
-		
+		/*
 		char buff[128], a, b;
 		struct ibv_mr	*mr;
 		struct mr_data_t remote_mr;
@@ -360,8 +360,9 @@ RDMADevice::RDMADevice(netaddr raddr, uint32_t num_connections, uint64_t far_mem
 				, mr->lkey, remote_mr, 2);
 		manager_.poll_completion();
 		manager_.tcp_sync_data(1, &a, &b);
-		if(!mr)
+		if(mr)
 			ibv_dereg_mr(mr);
+		*/
 
 
 		// Initialize slave connections.
@@ -372,27 +373,30 @@ RDMADevice::RDMADevice(netaddr raddr, uint32_t num_connections, uint64_t far_mem
 			shared_pool_.push(remote_slave);
 		}
 
-		/*construct(kVanillaPtrDSType, kVanillaPtrDSID, sizeof(far_mem_size),*/
-			/*reinterpret_cast<uint8_t *>(&far_mem_size));*/
+		construct(kVanillaPtrDSType, kVanillaPtrDSID, sizeof(far_mem_size),
+			reinterpret_cast<uint8_t *>(&far_mem_size));
 }
 
 RDMADevice::~RDMADevice(){
 	tcpconn_t *remote_master_ = manager_.get_tcpconn();
 	uint8_t ack;
-	/*destruct(kVanillaPtrDSID);*/
+	destruct(kVanillaPtrDSID);
 
 	/*send shutdown signal*/
 	helpers::tcp_write_until(remote_master_, &kOpShutdown, kOpcodeSize);
 	helpers::tcp_read_until(remote_master_, &ack, sizeof(ack));
-	/*tcp_close(remote_master_);*/
 	shared_pool_.for_each([&](auto remote_slave) { tcp_close(remote_slave); });
 }
 
 void RDMADevice::read_object(uint8_t ds_id, uint8_t obj_id_len, const uint8_t *obj_id,
-		uint16_t *data_len, uint8_t *data_buf){}
+		uint16_t *data_len, uint8_t *data_buf){
+	
+}
 
 void RDMADevice::write_object(uint8_t ds_id, uint8_t obj_id_len, const uint8_t *obj_id, 
-		uint16_t data_len, const uint8_t *data_buf){}
+		uint16_t data_len, const uint8_t *data_buf){
+	
+}
 
 bool RDMADevice::remove_object(uint64_t ds_id, uint8_t obj_id_len, const uint8_t *obj_id){}
 
@@ -424,25 +428,40 @@ void RDMADevice::_construct(tcpconn_t *remote_slave, uint8_t ds_type, uint8_t ds
 	uint8_t req[kOpcodeSize + sizeof(ds_type) + Object::kDSIDSize 
 		+ sizeof(param_len) + std::numeric_limits<decltype(param_len)>::max()];
 
-__builtin_memcpy(&req[0], &kOpConstruct, sizeof(kOpConstruct));
-__builtin_memcpy(&req[kOpcodeSize], &ds_type, sizeof(ds_type));
-__builtin_memcpy(&req[kOpcodeSize + sizeof(ds_type)], &ds_id,
-                 Object::kDSIDSize);
-__builtin_memcpy(&req[kOpcodeSize + sizeof(ds_type) + Object::kDSIDSize],
-                 &param_len, sizeof(param_len));
+	__builtin_memcpy(&req[0], &kOpConstruct, sizeof(kOpConstruct));
+	__builtin_memcpy(&req[kOpcodeSize], &ds_type, sizeof(ds_type));
+	__builtin_memcpy(&req[kOpcodeSize + sizeof(ds_type)], &ds_id,
+			 Object::kDSIDSize);
+	__builtin_memcpy(&req[kOpcodeSize + sizeof(ds_type) + Object::kDSIDSize],
+			 &param_len, sizeof(param_len));
 
-memcpy(&req[kOpcodeSize + sizeof(ds_type) + Object::kDSIDSize +
-            sizeof(param_len)],
-       params, param_len);
-helpers::tcp_write_until(remote_slave, req,
-                         kOpcodeSize + sizeof(ds_type) + Object::kDSIDSize +
-                             sizeof(param_len) + param_len);
+	memcpy(&req[kOpcodeSize + sizeof(ds_type) + Object::kDSIDSize +
+		    sizeof(param_len)],
+	       params, param_len);
+	helpers::tcp_write_until(remote_slave, req,
+				 kOpcodeSize + sizeof(ds_type) + Object::kDSIDSize +
+				     sizeof(param_len) + param_len);
 
-uint8_t ack;
-helpers::tcp_read_until(remote_slave, &ack, sizeof(ack));
+	/* receive mr_data_t */
+	struct mr_data_t	mr_data;
+	helpers::tcp_read_until(remote_slave, &mr_data, sizeof(struct mr_data_t));
 }
 
+/* Request:
+ * |Opcode = kOpDeconstruct (1B)|ds_id(1B)|
+ * Response:
+ * |Ack (1B)|
+ */
 void RDMADevice::_destruct(tcpconn_t *remote_slave, uint8_t ds_id){
+	uint8_t req[kOpcodeSize + Object::kDSIDSize];
+
+	__builtin_memcpy(&req[0], &kOpDeconstruct, sizeof(kOpDeconstruct));
+	__builtin_memcpy(&req[kOpcodeSize], &ds_id, Object::kDSIDSize);
+
+	helpers::tcp_write_until(remote_slave, req, kOpcodeSize + Object::kDSIDSize);
+
+	uint8_t ack;
+	helpers::tcp_read_until(remote_slave, &ack, sizeof(ack));
 }
 
 } // namespace far_memory
