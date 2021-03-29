@@ -119,9 +119,11 @@ void process_destruct(tcpconn_t *c) {
   if(iter != server_mr.end()){
     mr = iter->second;
     server_mr.erase(ds_id);
+    void *addr = mr->addr;
 
     if(ibv_dereg_mr(mr))
       cerr << "ibv_dereg_mr failed" << endl;
+    free(addr);
   }
 
   uint8_t ack;
@@ -214,6 +216,23 @@ void master_fn(tcpconn_t *c) {
   std::cout << buff << std::endl;
   if(mr)
 	  ibv_dereg_mr(mr);*/
+
+  /* testcase for construct */
+  char		a, b;
+  struct ibv_mr	*mr;
+  manager.tcp_sync_data(1, &a, &b);
+  map<uint8_t, struct ibv_mr*>::iterator	iter;
+  iter = server_mr.find(0);
+  if(iter != server_mr.end()){
+    char *buff = reinterpret_cast<char*>(mr->addr);
+    memset(buff, 0, 128);
+    memcpy(buff, "IAMServerfuck", 13);
+    manager.tcp_sync_data(1, &a, &b);
+    std::cout << buff << std::endl;
+  }
+  else
+    cerr << "not found" << endl;
+
 
   /* wait for shutdown command */
   helpers::tcp_read_until(c, &opcode, TCPDevice::kOpcodeSize);

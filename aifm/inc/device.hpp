@@ -4,6 +4,7 @@ extern "C" {
 #include <runtime/tcp.h>
 }
 
+#include <map>
 #include "helpers.hpp"
 #include "server.hpp"
 #include "shared_pool.hpp"
@@ -123,10 +124,11 @@ public:
 
 class RDMADevice : public FarMemDevice {
 private:
-  constexpr static uint32_t	kPrefetchWinSize = 1 << 20;
-  Server			server_;
-  RDMAManager			manager_;
-  SharedPool<tcpconn_t *>	shared_pool_;
+  constexpr static uint32_t		kPrefetchWinSize = 1 << 20;
+  Server				server_;
+  RDMAManager				manager_;
+  SharedPool<tcpconn_t *>		shared_pool_;
+  std::map<uint8_t, struct mr_data_t>	remote_mrs;
 
 public:
   constexpr static uint32_t kOpcodeSize = 1;
