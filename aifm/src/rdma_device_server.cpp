@@ -87,9 +87,6 @@ void process_construct(tcpconn_t *c) {
     BUG_ON(param_len != sizeof(decltype(size)));
     size = *(reinterpret_cast<decltype(size) *>(params));
     buff = reinterpret_cast<char*>(malloc(size));
-    fprintf(stdout, "size: %ld\n", size);
-    /*memset(buff, 0, size);*/
-    /*memcpy(buff, "IAMServerFUck", 13);*/
     mr = manager.reg_addr(reinterpret_cast<uint64_t>(buff), size);
     if(mr == NULL)
       std::cerr << "reg addr return NULL" << std::endl;
@@ -224,7 +221,7 @@ void master_fn(tcpconn_t *c) {
 	  ibv_dereg_mr(mr);*/
 
   /* testcase for construct */
-  char		a, b;
+  /*char		a, b;
   struct ibv_mr	*mr;
   manager.tcp_sync_data(1, &a, &b);
   map<uint8_t, struct ibv_mr*>::iterator	iter;
@@ -239,7 +236,7 @@ void master_fn(tcpconn_t *c) {
     std::cout << buff << std::endl;
   }
   else
-    cerr << "not found" << endl;
+    cerr << "not found" << endl;*/
 
 
   /* wait for shutdown command */

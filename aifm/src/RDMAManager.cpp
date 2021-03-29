@@ -144,7 +144,7 @@ int RDMAManager::resources_create(int cq_size, int memory_size){
 	struct ibv_device		**dev_list = NULL;
 	struct ibv_qp_init_attr		qp_init_attr;
 	struct ibv_device		*ib_dev = NULL;
-	int				i, mr_flags = 0, num_devices, rc = 0;
+	int				i, num_devices, rc = 0;
 
 	
 	/*if(sock_connect() < 0){*/
@@ -480,7 +480,7 @@ int RDMAManager::modify_qp_to_rts(struct ibv_qp *qp){
 
 
 int RDMAManager::post_send(int opcode, uint64_t local_addr, int len, uint32_t lkey
-		, struct mr_data_t remote_mr, int remote_addr_offset){
+		, struct mr_data_t *remote_mr, uint64_t remote_addr_offset){
 	struct ibv_send_wr	sr;
 	struct ibv_sge		sge;
 	struct ibv_send_wr	*bad_wr = NULL;
@@ -501,8 +501,8 @@ int RDMAManager::post_send(int opcode, uint64_t local_addr, int len, uint32_t lk
 	sr.opcode = static_cast<ibv_wr_opcode>(opcode);
 	sr.send_flags = IBV_SEND_SIGNALED;
 	if (opcode != IBV_WR_SEND){
-		sr.wr.rdma.remote_addr = remote_mr.addr + remote_addr_offset;
-		sr.wr.rdma.rkey = remote_mr.rkey;
+		sr.wr.rdma.remote_addr = remote_mr->addr + remote_addr_offset;
+		sr.wr.rdma.rkey = remote_mr->rkey;
 	}
 	
 	/* there is a Receive Request in the responder side, so we won't get any into RNR flow */

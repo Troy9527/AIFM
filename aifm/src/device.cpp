@@ -373,11 +373,12 @@ RDMADevice::RDMADevice(netaddr raddr, uint32_t num_connections, uint64_t far_mem
 	}
 
 	remote_mrs.clear();
+	object_lens.clear();
 	construct(kVanillaPtrDSType, kVanillaPtrDSID, sizeof(far_mem_size),
 		reinterpret_cast<uint8_t *>(&far_mem_size));
 
 	/* testcase for construct */
-	char		buff[128], a, b;
+	/*char		buff[128], a, b;
 	struct ibv_mr	*mr;
 	manager_.tcp_sync_data(1, &a, &b);
 
@@ -391,14 +392,14 @@ RDMADevice::RDMADevice(netaddr raddr, uint32_t num_connections, uint64_t far_mem
 		remote_mr = &(iter->second);
 		
 		manager_.post_send(IBV_WR_RDMA_READ, reinterpret_cast<uint64_t>(buff), 9
-				, mr->lkey, *remote_mr, 0);
+				, mr->lkey, remote_mr, 0);
 		manager_.poll_completion();
 		std::cout << buff << std::endl;
 
 		memset(buff, 0, 128);
 		memcpy(buff, "ggin", 4);
 		manager_.post_send(IBV_WR_RDMA_WRITE, reinterpret_cast<uint64_t>(buff), 4
-				, mr->lkey, *remote_mr, 2);
+				, mr->lkey, remote_mr, 2);
 		manager_.poll_completion();
 		manager_.tcp_sync_data(1, &a, &b);
 
@@ -407,7 +408,20 @@ RDMADevice::RDMADevice(netaddr raddr, uint32_t num_connections, uint64_t far_mem
 		std::cerr << "ds_id: " << kVanillaPtrDSID << " not found" << std::endl;
 
 	if(mr)
-		ibv_dereg_mr(mr);
+		ibv_dereg_mr(mr);*/
+	
+	/* testcase for read_object and write_object */
+	char		buff[128], buff2[128];
+	uint16_t	len = 9;
+
+	memset(buff, 0, 128);
+	memcpy(buff, "ggininder", len);
+	write_object(0, 8, 0, len, reinterpret_cast<uint8_t *>(buff));
+
+	read_object(0, 8, 0, &len, reinterpret_cast<uint8_t *>(buff2));
+	
+	std::cout << "len = " << len << std::endl;
+	std::cout << buff2 << std::endl;
 }
 
 RDMADevice::~RDMADevice(){
@@ -423,20 +437,59 @@ RDMADevice::~RDMADevice(){
 
 void RDMADevice::read_object(uint8_t ds_id, uint8_t obj_id_len, const uint8_t *obj_id,
 		uint16_t *data_len, uint8_t *data_buf){
+	Stats::start_measure_read_object_cycles();
+	std::map<uint8_t, struct mr_data_t>::iterator	iter;
+	std::map<const uint8_t *, uint16_t>::iterator	iter2;
+	struct mr_data_t	*remote_mr;
 
+	iter = remote_mrs.find(ds_id);
+	if(iter != remote_mrs.end()){
+		remote_mr = &(iter->second);
+		iter2 = object_lens[ds_id].find(obj_id);
+
+		if(iter2 != object_lens[ds_id].end())
+			*data_len = iter2->second;
+		else
+			std::cerr << "cannot find object length" << std::endl;
+
+		manager_.post_send(IBV_WR_RDMA_READ, reinterpret_cast<uint64_t>(data_buf), *data_len
+				, 1, remote_mr, reinterpret_cast<uint64_t>(obj_id));
+		manager_.poll_completion();
+
+		/*object_lens[ds_id].insert(std::make_pair(obj_id, data_len));*/
+	}
+	else
+		std::cerr << "ds_id: " << ds_id << " not found" << std::endl;
+
+
+	Stats::finish_measure_read_object_cycles();
 }
 
 void RDMADevice::write_object(uint8_t ds_id, uint8_t obj_id_len, const uint8_t *obj_id, 
 		uint16_t data_len, const uint8_t *data_buf){
+	Stats::start_measure_write_object_cycles();
+	
 	std::map<uint8_t, struct mr_data_t>::iterator	iter;
-	struct mr_data_t				mr_data;
+	struct mr_data_t	*remote_mr;
+	struct ibv_mr		*mr;
 
 	iter = remote_mrs.find(ds_id);
 	if(iter != remote_mrs.end()){
+		remote_mr = &(iter->second);
+		mr = manager_.reg_addr(reinterpret_cast<uint64_t>(data_buf), data_len);
 		
+		manager_.post_send(IBV_WR_RDMA_WRITE, reinterpret_cast<uint64_t>(data_buf), data_len
+				, mr->lkey, remote_mr, reinterpret_cast<uint64_t>(obj_id));
+		manager_.poll_completion();
+		ibv_dereg_mr(mr);
+
+		object_lens[ds_id].insert(std::make_pair(obj_id, data_len));
 	}
 	else
 		std::cerr << "ds_id: " << ds_id << " not found" << std::endl;
+	
+
+	Stats::finish_measure_write_object_cycles();
 }
 
 bool RDMADevice::remove_object(uint64_t ds_id, uint8_t obj_id_len, const uint8_t *obj_id){
@@ -490,6 +543,7 @@ void RDMADevice::_construct(tcpconn_t *remote_slave, uint8_t ds_type, uint8_t ds
 	helpers::tcp_read_until(remote_slave, &mr_data, sizeof(struct mr_data_t));
 	
 	remote_mrs[ds_id] = mr_data;
+	object_lens.insert(std::make_pair(ds_id, std::map<const uint8_t *, uint16_t>()));
 }
 
 /* Request:
@@ -509,6 +563,7 @@ void RDMADevice::_destruct(tcpconn_t *remote_slave, uint8_t ds_id){
 	helpers::tcp_read_until(remote_slave, &ack, sizeof(ack));
 
 	remote_mrs.erase(ds_id);
+	object_lens.erase(ds_id);
 }
 
 } // namespace far_memory

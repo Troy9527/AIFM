@@ -108,7 +108,7 @@ namespace far_memory {
 		int	modify_qp_to_rts(struct ibv_qp *qp);
 	
 		int	post_send(int opcode, uint64_t local_addr, int len, uint32_t lkey
-				, struct mr_data_t remote_mr, int remote_addr_offset);
+				, struct mr_data_t *remote_mr, uint64_t remote_addr_offset);
 		int	post_receive(uintptr_t addr, int len, uint32_t lkey);
 		int	poll_completion(void);
 	};
