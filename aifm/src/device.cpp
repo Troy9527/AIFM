@@ -415,6 +415,7 @@ RDMADevice::RDMADevice(netaddr raddr, uint32_t num_connections, uint64_t far_mem
 	uint16_t	len = 9;
 
 	memset(buff, 0, 128);
+	memset(buff2, 0, 128);
 	memcpy(buff, "ggininder", len);
 	write_object(0, 8, 0, len, reinterpret_cast<uint8_t *>(buff));
 
