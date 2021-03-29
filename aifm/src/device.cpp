@@ -410,8 +410,9 @@ RDMADevice::RDMADevice(netaddr raddr, uint32_t num_connections, uint64_t far_mem
 	if(mr)
 		ibv_dereg_mr(mr);*/
 	
+	
 	/* testcase for read_object and write_object */
-	char		buff[128], buff2[128];
+	/*char		buff[128], buff2[128];
 	uint16_t	len = 9;
 
 	memset(buff, 0, 128);
@@ -422,7 +423,7 @@ RDMADevice::RDMADevice(netaddr raddr, uint32_t num_connections, uint64_t far_mem
 	read_object(0, 8, 0, &len, reinterpret_cast<uint8_t *>(buff2));
 	
 	std::cout << "len = " << len << std::endl;
-	std::cout << buff2 << std::endl;
+	std::cout << buff2 << std::endl;*/
 }
 
 RDMADevice::~RDMADevice(){

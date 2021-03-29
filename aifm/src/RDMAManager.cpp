@@ -13,9 +13,9 @@ extern "C" {
 
 #include "RDMAManager.hpp"
 #include "helpers.hpp"
-#ifndef DEBUG
-#define DEBUG 1
-#endif
+/*#ifndef DEBUG*/
+/*#define DEBUG 1*/
+/*#endif*/
 
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 static inline uint64_t htonll(uint64_t x) { return bswap_64(x); }
@@ -58,86 +58,6 @@ void RDMAManager::tcp_connect(netaddr raddr){
 void RDMAManager::tcp_sync_data(int xfer_size, char *local_data, char *remote_data){
 	helpers::tcp_write_until(remote_master_, local_data, xfer_size);
 	helpers::tcp_read_until(remote_master_, remote_data, xfer_size);
-}
-
-int RDMAManager::sock_connect(void){
-	/*struct addrinfo		*resolved_addr = NULL;
-	struct addrinfo		*iterator;
-	char			service[6];
-	int			listenfd = 0;
-	struct addrinfo		hints ={
-					.ai_flags = AI_PASSIVE,
-					.ai_family = AF_INET,
-					.ai_socktype = SOCK_STREAM};
-
-	if (sprintf(service, "%d", config.tcp_port) < 0){
-		std::cerr << "sprintf error" << std::endl;
-		return -1;
-	}
-
-	sockfd = getaddrinfo(config.server_name, service, &hints, &resolved_addr);
-	if (sockfd < 0){
-		std::cerr << "getaddrinfo error" << std::endl;
-		return -1;
-	}
-
-
-	for (iterator = resolved_addr; iterator; iterator = iterator->ai_next)
-	{
-		sockfd = socket(iterator->ai_family, iterator->ai_socktype, iterator->ai_protocol);
-		if (sockfd >= 0)
-		{
-			if (config.server_name)
-			{
-				if (connect(sockfd, iterator->ai_addr, iterator->ai_addrlen) < 0)
-				{
-					std::cerr << "connect failed" << std::endl;
-					close(sockfd);
-					sockfd = -1;
-				}
-            		}
-			else
-			{
-				listenfd = sockfd;
-				if (bind(listenfd, iterator->ai_addr, iterator->ai_addrlen) < 0){
-					std::cerr << "bind failed" << std::endl;
-					return -1;
-				}
-
-				listen(listenfd, 1);
-				sockfd = accept(listenfd, NULL, 0);
-			}
-		}
-	}
-		
-	if (listenfd)
-		close(listenfd);
-	if (resolved_addr)
-		freeaddrinfo(resolved_addr);
-
-	return sockfd;*/
-}
-
-
-int RDMAManager::sock_sync_data(int xfer_size, char *local_data, char *remote_data){
-	/*int	rc;
-	int	read_bytes = 0;
-	int	total_read_bytes = 0;
-	
-	rc = write(sockfd, local_data, xfer_size);
-	if (rc < xfer_size)
-		fprintf(stderr, "Failed writing data during sock_sync_data\n");
-	else
-		rc = 0;
-	while (!rc && total_read_bytes < xfer_size)
-	{
-		read_bytes = read(sockfd, remote_data, xfer_size);
-		if (read_bytes > 0)
-			total_read_bytes += read_bytes;
-		else
-			rc = read_bytes;
-	}
-	return rc;*/
 }
 
 int RDMAManager::resources_create(int cq_size, int memory_size){

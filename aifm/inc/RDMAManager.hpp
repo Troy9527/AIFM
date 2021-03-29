@@ -96,8 +96,6 @@ namespace far_memory {
 		
 		void	tcp_connect(netaddr raddr);
 		void	tcp_sync_data(int xfer_size, char *local_data, char *remote_data);
-		int	sock_connect(void);
-		int	sock_sync_data(int xfer_size, char *local_data, char *remote_data);
 		
 		int	resources_create(int cq_size, int meomry_size);
 		int	resources_destroy(void);

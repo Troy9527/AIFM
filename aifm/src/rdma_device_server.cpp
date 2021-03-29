@@ -54,8 +54,6 @@ void process_shutdown(tcpconn_t *c) {
 // Response:
 // |Ack (1B)|
 void process_construct(tcpconn_t *c) {
-	std::cout << "construct" << std::endl;
-
   uint8_t ds_type;
   uint8_t ds_id;
   uint8_t param_len;
