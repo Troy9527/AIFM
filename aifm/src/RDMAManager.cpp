@@ -425,8 +425,9 @@ int RDMAManager::post_send(int opcode, uint64_t local_addr, uint32_t len, uint32
 		sr.wr.rdma.rkey = remote_mr->rkey;
 	}
 #ifdef DEBUG
-	fprintf(stdout, "Using Remote MR with addr=%p, rkey=0x%x, len=%ld\n",
-			reinterpret_cast<void *>(remote_mr->addr), remote_mr->rkey, remote_mr->len);
+	fprintf(stdout, "Using Remote MR with addr=%p, rkey=0x%x, len=%ld, obj_id=%ld (%p)\n",
+			reinterpret_cast<void *>(remote_mr->addr), remote_mr->rkey, 
+			remote_mr->len, remote_addr_offset, reinterpret_cast<void *>(remote_addr_offset));
 #endif
 	
 	/* there is a Receive Request in the responder side, so we won't get any into RNR flow */
@@ -581,8 +582,8 @@ struct ibv_mr* RDMAManager::reg_addr(uint64_t addr, uint64_t len){
 		return NULL;
 	}
 #ifdef DEBUG
-	fprintf(stdout, "MR was registered with addr=%p, lkey=0x%x, rkey=0x%x, flags=0x%x\n",
-			ret->addr, ret->lkey, ret->rkey, mr_flags);
+	fprintf(stdout, "MR was registered with addr=%p, lkey=0x%x, rkey=0x%x, len=%ld, flags=0x%x\n",
+			ret->addr, ret->lkey, ret->rkey, ret->length, mr_flags);
 #endif
 
 	
