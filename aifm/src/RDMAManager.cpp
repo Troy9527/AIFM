@@ -13,9 +13,9 @@ extern "C" {
 
 #include "RDMAManager.hpp"
 #include "helpers.hpp"
-/*#ifndef DEBUG*/
-/*#define DEBUG 1*/
-/*#endif*/
+#ifndef DEBUG
+#define DEBUG 1
+#endif
 
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 static inline uint64_t htonll(uint64_t x) { return bswap_64(x); }
@@ -399,7 +399,7 @@ int RDMAManager::modify_qp_to_rts(struct ibv_qp *qp){
 }
 
 
-int RDMAManager::post_send(int opcode, uint64_t local_addr, int len, uint32_t lkey
+int RDMAManager::post_send(int opcode, uint64_t local_addr, uint32_t len, uint32_t lkey
 		, struct mr_data_t *remote_mr, uint64_t remote_addr_offset){
 	struct ibv_send_wr	sr;
 	struct ibv_sge		sge;
@@ -424,6 +424,10 @@ int RDMAManager::post_send(int opcode, uint64_t local_addr, int len, uint32_t lk
 		sr.wr.rdma.remote_addr = remote_mr->addr + remote_addr_offset;
 		sr.wr.rdma.rkey = remote_mr->rkey;
 	}
+#ifdef DEBUG
+	fprintf(stdout, "Using Remote MR with addr=%p, rkey=0x%x, len=%ld\n",
+			reinterpret_cast<void *>(remote_mr->addr), remote_mr->rkey, remote_mr->len);
+#endif
 	
 	/* there is a Receive Request in the responder side, so we won't get any into RNR flow */
 	rc = ibv_post_send(res.qp, &sr, &bad_wr);
@@ -456,7 +460,7 @@ int RDMAManager::post_send(int opcode, uint64_t local_addr, int len, uint32_t lk
 	return rc;
 }
 
-int RDMAManager::post_receive(uintptr_t addr, int len, uint32_t lkey){
+int RDMAManager::post_receive(uintptr_t addr, uint32_t len, uint32_t lkey){
 	struct ibv_recv_wr	rr;
 	struct ibv_sge		sge;
 	struct ibv_recv_wr	*bad_wr;
@@ -565,7 +569,7 @@ int RDMAManager::resources_destroy(void){
 	return rc;
 }
 
-struct ibv_mr* RDMAManager::reg_addr(uint64_t addr, int len){
+struct ibv_mr* RDMAManager::reg_addr(uint64_t addr, uint64_t len){
 	struct ibv_mr	*ret = NULL;
 	int		mr_flags = 0;
 	

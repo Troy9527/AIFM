@@ -91,7 +91,7 @@ namespace far_memory {
 			remote_master_ = c;}
 		tcpconn_t* get_tcpconn(void){
 			return remote_master_;}
-		struct ibv_mr* reg_addr(uint64_t addr, int len);
+		struct ibv_mr* reg_addr(uint64_t addr, uint64_t len);
 		
 		
 		void	tcp_connect(netaddr raddr);
@@ -105,9 +105,9 @@ namespace far_memory {
 		int	modify_qp_to_rtr(struct ibv_qp *qp, uint32_t remote_qpn, uint16_t dlid, uint8_t *dgid);
 		int	modify_qp_to_rts(struct ibv_qp *qp);
 	
-		int	post_send(int opcode, uint64_t local_addr, int len, uint32_t lkey
+		int	post_send(int opcode, uint64_t local_addr, uint32_t len, uint32_t lkey
 				, struct mr_data_t *remote_mr, uint64_t remote_addr_offset);
-		int	post_receive(uintptr_t addr, int len, uint32_t lkey);
+		int	post_receive(uintptr_t addr, uint32_t len, uint32_t lkey);
 		int	poll_completion(void);
 	};
 }
