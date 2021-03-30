@@ -447,7 +447,7 @@ void RDMADevice::read_object(uint8_t ds_id, uint8_t obj_id_len, const uint8_t *o
 	iter = remote_mrs.find(ds_id);
 	if(iter != remote_mrs.end()){
 		remote_mr = &(iter->second);
-		iter2 = object_lens[ds_id].find(*(reinterpret_cast<const uint64_t *>(ds_id)));
+		iter2 = object_lens[ds_id].find(*(reinterpret_cast<const uint64_t *>(obj_id)));
 
 		if(iter2 != object_lens[ds_id].end())
 			*data_len = iter2->second;
@@ -461,7 +461,7 @@ void RDMADevice::read_object(uint8_t ds_id, uint8_t obj_id_len, const uint8_t *o
 		/*object_lens[ds_id].insert(std::make_pair(obj_id, data_len));*/
 	}
 	else
-		std::cerr << "ds_id: " << *(reinterpret_cast<const uint64_t *>(ds_id)) << " not found" << std::endl;
+		std::cerr << "ds_id: " << ds_id << " not found" << std::endl;
 
 
 	Stats::finish_measure_read_object_cycles();
@@ -485,10 +485,10 @@ void RDMADevice::write_object(uint8_t ds_id, uint8_t obj_id_len, const uint8_t *
 		manager_.poll_completion();
 		ibv_dereg_mr(mr);
 
-		object_lens[ds_id].insert(std::make_pair(*(reinterpret_cast<const uint64_t *>(ds_id)), data_len));
+		object_lens[ds_id].insert(std::make_pair(*(reinterpret_cast<const uint64_t *>(obj_id)), data_len));
 	}
 	else
-		std::cerr << "ds_id: " << *(reinterpret_cast<const uint64_t *>(ds_id)) << " not found" << std::endl;
+		std::cerr << "ds_id: " << ds_id << " not found" << std::endl;
 	
 
 	Stats::finish_measure_write_object_cycles();
