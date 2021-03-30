@@ -443,6 +443,7 @@ void RDMADevice::read_object(uint8_t ds_id, uint8_t obj_id_len, const uint8_t *o
 	std::map<uint8_t, struct mr_data_t>::iterator	iter;
 	std::map<uint64_t, uint16_t>::iterator	iter2;
 	struct mr_data_t	*remote_mr;
+	struct ibv_mr		*mr;
 
 	iter = remote_mrs.find(ds_id);
 	if(iter != remote_mrs.end()){
@@ -453,10 +454,13 @@ void RDMADevice::read_object(uint8_t ds_id, uint8_t obj_id_len, const uint8_t *o
 			*data_len = iter2->second;
 		else
 			std::cerr << "cannot find object length" << std::endl;
+		
+		mr = manager_.reg_addr(reinterpret_cast<uint64_t>(data_buf), *data_len);
 
 		manager_.post_send(IBV_WR_RDMA_READ, reinterpret_cast<uint64_t>(data_buf), *data_len
-				, 1, remote_mr, *(reinterpret_cast<const uint64_t *>(obj_id)));
+				, mr->lkey, remote_mr, *(reinterpret_cast<const uint64_t *>(obj_id)));
 		manager_.poll_completion();
+		ibv_dereg_mr(mr);
 
 		/*object_lens[ds_id].insert(std::make_pair(obj_id, data_len));*/
 	}
