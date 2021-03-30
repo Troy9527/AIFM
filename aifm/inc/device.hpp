@@ -129,7 +129,7 @@ private:
   RDMAManager				manager_;
   SharedPool<tcpconn_t *>		shared_pool_;
   std::map<uint8_t, struct mr_data_t>	remote_mrs;
-  std::map<uint8_t, std::map<const uint8_t *, uint16_t>>	object_lens;
+  std::map<uint8_t, std::map<uint64_t, uint16_t>>	object_lens;
 
 public:
   constexpr static uint32_t kOpcodeSize = 1;
