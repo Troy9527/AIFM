@@ -16,6 +16,8 @@ class FarMemDevice {
 public:
   uint64_t far_mem_size_;
   uint32_t prefetch_win_size_;
+  uint8_t	*ptr;
+  uint64_t	size;
 
   FarMemDevice(uint64_t far_mem_size, uint32_t prefetch_win_size);
   virtual ~FarMemDevice() {}
@@ -35,6 +37,7 @@ public:
   virtual void compute(uint8_t ds_id, uint8_t opcode, uint16_t input_len,
                        const uint8_t *input_buf, uint16_t *output_len,
                        uint8_t *output_buf) = 0;
+  void reg_local_cache(uint8_t* cache, uint64_t len);
 };
 
 class FakeDevice : public FarMemDevice {
@@ -130,6 +133,8 @@ private:
   SharedPool<tcpconn_t *>		shared_pool_;
   std::map<uint8_t, struct mr_data_t>	remote_mrs;
   std::map<uint8_t, std::map<uint64_t, uint16_t>>	object_lens;
+  struct ibv_mr				*local_mr = NULL;
+  uint8_t				*buffer;
 
 public:
   constexpr static uint32_t kOpcodeSize = 1;

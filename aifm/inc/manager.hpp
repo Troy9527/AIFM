@@ -86,6 +86,7 @@ private:
     Region &core_local_free_region(bool nt);
     double get_free_region_ratio() const;
     uint32_t get_num_regions() const;
+    uint8_t* get_local_ptr();
   };
 
   RegionManager cache_region_manager_;

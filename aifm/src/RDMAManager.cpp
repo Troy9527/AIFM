@@ -10,12 +10,13 @@ extern "C" {
 #include <byteswap.h>
 #include <inttypes.h>
 #include <sys/time.h>
+#include <errno.h>
 
 #include "RDMAManager.hpp"
 #include "helpers.hpp"
-#ifndef DEBUG
-#define DEBUG 1
-#endif
+/*#ifndef DEBUG*/
+/*#define DEBUG 1*/
+/*#endif*/
 
 #if __BYTE_ORDER == __LITTLE_ENDIAN
 static inline uint64_t htonll(uint64_t x) { return bswap_64(x); }
@@ -180,8 +181,8 @@ int RDMAManager::resources_create(int cq_size, int memory_size){
 	qp_init_attr.sq_sig_all = 1;
 	qp_init_attr.send_cq = res.cq;
 	qp_init_attr.recv_cq = res.cq;
-	qp_init_attr.cap.max_send_wr = 1;
-	qp_init_attr.cap.max_recv_wr = 1;
+	qp_init_attr.cap.max_send_wr = 256;
+	qp_init_attr.cap.max_recv_wr = 256;
 	qp_init_attr.cap.max_send_sge = 1;
 	qp_init_attr.cap.max_recv_sge = 1;
 	res.qp = ibv_create_qp(res.pd, &qp_init_attr);
@@ -432,8 +433,14 @@ int RDMAManager::post_send(int opcode, uint64_t local_addr, uint32_t len, uint32
 	
 	/* there is a Receive Request in the responder side, so we won't get any into RNR flow */
 	rc = ibv_post_send(res.qp, &sr, &bad_wr);
-	if (rc)
-		fprintf(stderr, "failed to post SR\n");
+	if (rc){
+		fprintf(stderr, "failed to post SR, ret=%d, errno=%d (%s)\n", rc, errno, strerror(errno));
+		fprintf(stderr, "local_addr=%p, len=%d, lkey=0x%x, ", reinterpret_cast<void *>(local_addr), len, lkey);
+		fprintf(stderr, "Remote MR addr=%p, rkey=0x%x, MR_len=%ld, obj_id=%ld (%p)\n",
+			reinterpret_cast<void *>(remote_mr->addr), remote_mr->rkey, 
+			remote_mr->len, remote_addr_offset, reinterpret_cast<void *>(remote_addr_offset));
+;
+	}
 	else{
 		switch (opcode){
 		case IBV_WR_SEND:
@@ -574,11 +581,11 @@ struct ibv_mr* RDMAManager::reg_addr(uint64_t addr, uint64_t len){
 	struct ibv_mr	*ret = NULL;
 	int		mr_flags = 0;
 	
-
+	
 	mr_flags = IBV_ACCESS_LOCAL_WRITE | IBV_ACCESS_REMOTE_READ | IBV_ACCESS_REMOTE_WRITE;
 	ret = ibv_reg_mr(res.pd, reinterpret_cast<char*>(addr), len, mr_flags);
 	if (!ret){
-		fprintf(stderr, "ibv_reg_mr failed with mr_flags=0x%x\n", mr_flags);
+		fprintf(stderr, "ibv_reg_mr failed with mr_flags=0x%x, errno: %d (%s)\n", mr_flags, errno, strerror(errno));
 		return NULL;
 	}
 #ifdef DEBUG

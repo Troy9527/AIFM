@@ -75,6 +75,11 @@ FarMemManager::FarMemManager(uint64_t cache_size, uint64_t far_mem_size,
       available_ds_ids_.push(ds_id);
     }
   }
+  
+  auto free_regions_count = ceil(cache_size / static_cast<double>(Region::kSize));
+  device_ptr_->reg_local_cache(cache_region_manager_.get_local_ptr()
+		  , free_regions_count * Region::kSize);
+
 }
 
 FarMemManager::~FarMemManager() {
@@ -217,6 +222,10 @@ FarMemManagerFactory::build(uint64_t cache_size,
   ptr_ = new FarMemManager(cache_size, device->get_far_mem_size(),
                            num_gc_threads, device);
   return ptr_;
+}
+
+uint8_t* FarMemManager::RegionManager::get_local_ptr(){
+	return reinterpret_cast<uint8_t *>(local_cache_ptr_.get());
 }
 
 FarMemManager::RegionManager::RegionManager(uint64_t size, bool is_local) {
