@@ -135,6 +135,12 @@ private:
   std::map<uint8_t, std::map<uint64_t, uint16_t>>	object_lens;
   struct ibv_mr				*local_mr = NULL;
   uint8_t				*buffer;
+  SharedPool<struct ibv_mr *>		mr_pool_;
+  
+  void _read_object(struct ibv_mr *mr, uint8_t ds_id, uint8_t obj_id_len, const uint8_t *obj_id,
+                   uint16_t *data_len, uint8_t *data_buf);
+  void _write_object(struct ibv_mr *mr, uint8_t ds_id, uint8_t obj_id_len, const uint8_t *obj_id,
+                    uint16_t data_len, const uint8_t *data_buf);
 
 public:
   constexpr static uint32_t kOpcodeSize = 1;

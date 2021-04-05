@@ -1,6 +1,7 @@
 extern "C" {
 #include <net/ip.h>
 #include <runtime/storage.h>
+#include <runtime/preempt.h>
 }
 
 #include "device.hpp"
@@ -333,7 +334,8 @@ void TCPDevice::_compute(tcpconn_t *remote_slave, uint8_t ds_id, uint8_t opcode,
 }
 
 RDMADevice::RDMADevice(netaddr raddr, uint32_t num_connections, uint64_t far_mem_size)
-	: FarMemDevice(far_mem_size, kPrefetchWinSize), shared_pool_(num_connections){
+	: FarMemDevice(far_mem_size, kPrefetchWinSize), shared_pool_(num_connections),
+	mr_pool_(300){
 	char dev[]="mlx5_1";
 
 	manager_.set_dev(dev);
@@ -377,6 +379,24 @@ RDMADevice::RDMADevice(netaddr raddr, uint32_t num_connections, uint64_t far_mem
 	object_lens.clear();
 	construct(kVanillaPtrDSType, kVanillaPtrDSID, sizeof(far_mem_size),
 		reinterpret_cast<uint8_t *>(&far_mem_size));
+
+	/* testing */
+	/*struct ibv_mr	*m;*/
+	/*m = manager_.reg_addr(reinterpret_cast<uint64_t>(ptr), 128);*/
+	/*if(m == NULL)*/
+		/*std::cerr << "failed on register PTR MR" << std::endl;*/
+	/*else*/
+		/*fprintf(stdout, "MR was registered with addr=%p, lkey=0x%x, rkey=0x%x, len=%ld\n",*/
+			/*m->addr, m->lkey, m->rkey, m->length);*/
+	
+	struct ibv_mr	*mr;
+	void		*buf;
+	for (uint32_t i = 0; i < (300); i++){
+		buf = malloc(1<<16);
+		mr = manager_.reg_addr(reinterpret_cast<uint64_t>(buf), 1<<16);
+		mr_pool_.push(mr);
+	}
+
 
 	/* register local cache MR */
 	buffer = reinterpret_cast<uint8_t *>(malloc((1<<16)));
@@ -446,15 +466,44 @@ RDMADevice::~RDMADevice(){
 	if(local_mr)
 		ibv_dereg_mr(local_mr);
 	free(reinterpret_cast<void *>(buffer));
+
+	/*struct ibv_mr	*mr;*/
+	/*void		*buf;*/
+	/*for (uint32_t i = 0; i < (300); i++){*/
+		/*mr = mr_pool_.pop();*/
+		/*buf = mr->addr;*/
+		/*ibv_dereg_mr(mr);*/
+		/*free(buf);*/
+	/*}*/
+	mr_pool_.for_each([&](auto mr) {
+		void	*buf = mr->addr;
+		ibv_dereg_mr(mr);
+		free(buf);});
+
 }
 
 void RDMADevice::read_object(uint8_t ds_id, uint8_t obj_id_len, const uint8_t *obj_id,
+		uint16_t *data_len, uint8_t *data_buf){
+	auto mr = mr_pool_.pop();
+  	_read_object(mr, ds_id, obj_id_len, obj_id, data_len, data_buf);
+	mr_pool_.push(mr);
+	
+}
+
+void RDMADevice::write_object(uint8_t ds_id, uint8_t obj_id_len, const uint8_t *obj_id, 
+		uint16_t data_len, const uint8_t *data_buf){
+	auto mr = mr_pool_.pop();
+  	_write_object(mr, ds_id, obj_id_len, obj_id, data_len, data_buf);
+	mr_pool_.push(mr);
+}
+
+void RDMADevice::_read_object(struct ibv_mr *mr, uint8_t ds_id, uint8_t obj_id_len, const uint8_t *obj_id,
 		uint16_t *data_len, uint8_t *data_buf){
 	Stats::start_measure_read_object_cycles();
 	std::map<uint8_t, struct mr_data_t>::iterator	iter;
 	std::map<uint64_t, uint16_t>::iterator	iter2;
 	struct mr_data_t	*remote_mr;
-	/*struct ibv_mr		*mr;*/
+	void			*buf;
 
 	iter = remote_mrs.find(ds_id);
 	if(iter != remote_mrs.end()){
@@ -466,17 +515,12 @@ void RDMADevice::read_object(uint8_t ds_id, uint8_t obj_id_len, const uint8_t *o
 		else
 			std::cerr << "cannot find object length" << std::endl;
 		
-		/*mr = manager_.reg_addr(reinterpret_cast<uint64_t>(data_buf), *data_len);*/
-
-		/*manager_.post_send(IBV_WR_RDMA_READ, reinterpret_cast<uint64_t>(data_buf), *data_len*/
-				/*, local_mr->lkey, remote_mr, *(reinterpret_cast<const uint64_t *>(obj_id)));*/
-		manager_.post_send(IBV_WR_RDMA_READ, reinterpret_cast<uint64_t>(buffer)
-				, *data_len, local_mr->lkey, remote_mr
+		buf = mr->addr;
+		manager_.post_send(IBV_WR_RDMA_READ, reinterpret_cast<uint64_t>(buf)
+				, *data_len, mr->lkey, remote_mr
 				, *(reinterpret_cast<const uint64_t *>(obj_id)));
-		memcpy(data_buf, buffer, *data_len);
-		manager_.poll_completion();
-		/*ibv_dereg_mr(mr);*/
-
+		manager_.poll_completion(*(reinterpret_cast<const uint64_t *>(obj_id)));
+		memcpy(data_buf, buf, *data_len);
 	}
 	else
 		std::cerr << "ds_id: " << ds_id << " not found" << std::endl;
@@ -485,27 +529,24 @@ void RDMADevice::read_object(uint8_t ds_id, uint8_t obj_id_len, const uint8_t *o
 	Stats::finish_measure_read_object_cycles();
 }
 
-void RDMADevice::write_object(uint8_t ds_id, uint8_t obj_id_len, const uint8_t *obj_id, 
+void RDMADevice::_write_object(struct ibv_mr *mr, uint8_t ds_id, uint8_t obj_id_len, const uint8_t *obj_id, 
 		uint16_t data_len, const uint8_t *data_buf){
 	Stats::start_measure_write_object_cycles();
 	
 	std::map<uint8_t, struct mr_data_t>::iterator	iter;
 	struct mr_data_t	*remote_mr;
-	/*struct ibv_mr		*mr;*/
+	void			*buf;
 
 	iter = remote_mrs.find(ds_id);
 	if(iter != remote_mrs.end()){
 		remote_mr = &(iter->second);
-		/*mr = manager_.reg_addr(reinterpret_cast<uint64_t>(data_buf), data_len);*/
 		
-		/*manager_.post_send(IBV_WR_RDMA_WRITE, reinterpret_cast<uint64_t>(data_buf), data_len*/
-				/*, local_mr->lkey, remote_mr, *(reinterpret_cast<const uint64_t *>(obj_id)));*/
-		memcpy(buffer, data_buf , data_len);
-		manager_.post_send(IBV_WR_RDMA_WRITE, reinterpret_cast<uint64_t>(buffer)
-				, data_len, local_mr->lkey, remote_mr
+		buf = mr->addr;
+		memcpy(buf, data_buf , data_len);
+		manager_.post_send(IBV_WR_RDMA_WRITE, reinterpret_cast<uint64_t>(buf)
+				, data_len, mr->lkey, remote_mr
 				, *(reinterpret_cast<const uint64_t *>(obj_id)));
-		manager_.poll_completion();
-		/*ibv_dereg_mr(mr);*/
+		manager_.poll_completion(*(reinterpret_cast<const uint64_t *>(obj_id)));
 
 		object_lens[ds_id].insert(std::make_pair(*(reinterpret_cast<const uint64_t *>(obj_id)), data_len));
 	}
