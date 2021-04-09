@@ -37,7 +37,7 @@ public:
   virtual void compute(uint8_t ds_id, uint8_t opcode, uint16_t input_len,
                        const uint8_t *input_buf, uint16_t *output_len,
                        uint8_t *output_buf) = 0;
-  void reg_local_cache(uint8_t* cache, uint64_t len);
+  virtual void reg_local_cache(uint8_t* cache, uint64_t len){};
 };
 
 class FakeDevice : public FarMemDevice {
@@ -128,19 +128,14 @@ public:
 class RDMADevice : public FarMemDevice {
 private:
   constexpr static uint32_t		kPrefetchWinSize = 1 << 20;
-  Server				server_;
   RDMAManager				manager_;
   SharedPool<tcpconn_t *>		shared_pool_;
   std::map<uint8_t, struct mr_data_t>	remote_mrs;
-  std::map<uint8_t, std::map<uint64_t, uint16_t>>	object_lens;
+  /*std::map<uint8_t, std::map<uint64_t, uint16_t>>	object_lens;*/
+  /*SharedPool<struct mr_local_t *>	mr_pool_;*/
   struct ibv_mr				*local_mr = NULL;
-  uint8_t				*buffer;
-  SharedPool<struct ibv_mr *>		mr_pool_;
-  
-  void _read_object(struct ibv_mr *mr, uint8_t ds_id, uint8_t obj_id_len, const uint8_t *obj_id,
-                   uint16_t *data_len, uint8_t *data_buf);
-  void _write_object(struct ibv_mr *mr, uint8_t ds_id, uint8_t obj_id_len, const uint8_t *obj_id,
-                    uint16_t data_len, const uint8_t *data_buf);
+  struct ibv_mr				*data_len_mr[helpers::kNumCPUs];
+  uint8_t				*local_buf = NULL;
 
 public:
   constexpr static uint32_t kOpcodeSize = 1;
@@ -173,6 +168,7 @@ public:
   void compute(uint8_t ds_id, uint8_t opcode, uint16_t input_len,
                const uint8_t *input_buf, uint16_t *output_len,
                uint8_t *output_buf);
+  virtual void reg_local_cache(uint8_t* cache, uint64_t len) override;
 };
 
 } // namespace far_memory

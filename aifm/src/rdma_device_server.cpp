@@ -85,7 +85,7 @@ void process_construct(tcpconn_t *c) {
     BUG_ON(param_len != sizeof(decltype(size)));
     size = *(reinterpret_cast<decltype(size) *>(params));
     buff = reinterpret_cast<char*>(malloc(size));
-    mr = manager.reg_addr(reinterpret_cast<uint64_t>(buff), size);
+    mr = manager.reg_addr(reinterpret_cast<uint64_t>(buff), size, false);
     if(mr == NULL)
       std::cerr << "reg addr return NULL" << std::endl;
 
@@ -196,8 +196,8 @@ void master_fn(tcpconn_t *c) {
   uint8_t	opcode;
   
   manager.set_tcpconn(c);
-  manager.resources_create(16, 1);
-  manager.connect_qp();
+  manager.resources_create(16, 24);
+  manager.connect_qp(24);
 
   /*
   char			a, b, *buff;

@@ -2,13 +2,12 @@
 
 extern "C" {
 #include <runtime/tcp.h>
+#include <runtime/sync.h>
 }
 
-/*#include <sys/socket.h>*/
-/*#include <netdb.h>*/
-/*#include <netinet/in.h>*/
 #include <infiniband/verbs.h>
 #include <unistd.h>
+#include "helpers.hpp"
 
 
 #define FORCE_INLINE inline __attribute__((always_inline))
@@ -33,7 +32,7 @@ namespace far_memory {
 	/* structure to exchange data which is needed to connect the QPs */
 	struct cm_con_data_t
 	{
-		uint32_t	qp_num;		/* QP number */
+		/*uint32_t	qp_num;*/		/* QP number */
 		uint16_t	lid;		/* LID of the IB port */
 		uint8_t		gid[16]; 	/* gid */
 	} __attribute__((packed));
@@ -45,20 +44,23 @@ namespace far_memory {
 		uint32_t	rkey;		/* Remote key */
 		size_t		len;		/* buffer length */
 	} __attribute__((packed));
+	
+	struct mr_local_t
+	{
+		struct ibv_mr	*mr;		/* Local MR */
+		spinlock_t	lock;		/* SpinLock for sync */
+	};
 
 	/* structure of system resources */
 	struct resources
 	{
-		struct ibv_device_attr	device_attr;	/* Device attributes */
-		struct ibv_port_attr	port_attr;	/* IB port attributes */
-		struct cm_con_data_t	remote_props;	/* values to connect to remote side */
-		struct ibv_context	*ib_ctx;	/* device handle */
-		struct ibv_pd		*pd;		/* PD handle */
-		struct ibv_cq		*cq;		/* CQ handle */
-		struct ibv_qp		*qp;		/* QP handle */
-		struct ibv_mr		*mr;		/* MR handle for buf */
-		char			*buf;		/* memory buffer pointer, used for RDMA and send ops */
-		int			msize;
+		struct ibv_device_attr	device_attr;		/* Device attributes */
+		struct ibv_port_attr	port_attr;		/* IB port attributes */
+		struct cm_con_data_t	remote_props;		/* values to connect to remote side */
+		struct ibv_context	*ib_ctx;		/* device handle */
+		struct ibv_pd		*pd;			/* PD handle */
+		struct ibv_cq		*cq[helpers::kNumCPUs];	/* CQ handle */
+		struct ibv_qp		*qp[helpers::kNumCPUs];	/* QP handle */
 	};
 
 
@@ -91,23 +93,23 @@ namespace far_memory {
 			remote_master_ = c;}
 		tcpconn_t* get_tcpconn(void){
 			return remote_master_;}
-		struct ibv_mr* reg_addr(uint64_t addr, uint64_t len);
+		struct ibv_mr* reg_addr(uint64_t addr, uint64_t len, bool isLocal);
 		
 		
 		void	tcp_connect(netaddr raddr);
 		void	tcp_sync_data(int xfer_size, char *local_data, char *remote_data);
 		
-		int	resources_create(int cq_size, int meomry_size);
 		int	resources_destroy(void);
-		int	connect_qp(void);
+		int	resources_create(int cq_size, int cores);
+		int	connect_qp(uint8_t cores);
 
 		int	modify_qp_to_init(struct ibv_qp *qp);
 		int	modify_qp_to_rtr(struct ibv_qp *qp, uint32_t remote_qpn, uint16_t dlid, uint8_t *dgid);
 		int	modify_qp_to_rts(struct ibv_qp *qp);
 	
-		int	post_send(int opcode, uint64_t local_addr, uint32_t len, uint32_t lkey
+		int	post_send(uint8_t core, int opcode, uint64_t local_addr, uint32_t len, uint32_t lkey
 				, struct mr_data_t *remote_mr, uint64_t remote_addr_offset);
-		int	post_receive(uintptr_t addr, uint32_t len, uint32_t lkey);
-		int	poll_completion(void);
+		int	post_receive(uint8_t core, uintptr_t addr, uint32_t len, uint32_t lkey);
+		int	poll_completion(uint8_t core);
 	};
 }
