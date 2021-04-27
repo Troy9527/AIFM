@@ -28,6 +28,9 @@ uint64_t raw_array_A[kNumEntries];
 uint64_t raw_array_B[kNumEntries];
 uint64_t raw_array_C[kNumEntries];
 
+unsigned cycles_low_start, cycles_high_start;
+unsigned cycles_low_end, cycles_high_end;
+
 template <uint64_t N, typename T>
 void copy_array(Array<T, N> *array, T *raw_array) {
   for (uint64_t i = 0; i < N; i++) {
@@ -90,7 +93,15 @@ void _main(void *arg) {
       std::unique_ptr<FarMemManager>(FarMemManagerFactory::build(
           kCacheSize, kNumGCThreads,
           new RDMADevice(raddr, kNumConnections, kFarMemSize)));
-  /*do_work(manager.get());*/
+
+  uint64_t	duration;
+  helpers::timer_start(&cycles_high_start, &cycles_low_start);
+  do_work(manager.get());
+  helpers::timer_end(&cycles_high_end, &cycles_low_end);
+  duration = helpers::get_elapsed_cycles(cycles_high_start, cycles_low_start,
+                                      cycles_high_end, cycles_low_end);
+  cout << "Time: " << duration << endl;
+
 }
 
 int main(int _argc, char *argv[]) {
