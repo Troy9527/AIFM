@@ -412,8 +412,6 @@ void RDMADevice::read_object(uint8_t ds_id, uint8_t obj_id_len, const uint8_t *o
 		manager_.poll_completion(get_core_num());
 		*data_len = *(reinterpret_cast<uint16_t *>(buff));
 		
-		/*if (*data_len != 64)*/
-			/*fprintf(stdout, "data_len=%hu #%hu\n", *data_len, *(reinterpret_cast<uint16_t *>(buff)));*/
 		preempt_enable();
 
 		if(*data_len){
@@ -425,12 +423,6 @@ void RDMADevice::read_object(uint8_t ds_id, uint8_t obj_id_len, const uint8_t *o
 			preempt_enable();
 		}
 
-		/*if(*(reinterpret_cast<uint64_t *>(local_buf + *(reinterpret_cast<const uint64_t *>(obj_id)))) */
-				/*!= *(reinterpret_cast<uint64_t *>(data_buf)))*/
-			/*fprintf(stderr, "(0x%lx) core=%d, local=%lu, remote=%lu, original=%lu, ptr=%p\n"*/
-					/*, *reinterpret_cast<const uint64_t *>(obj_id), get_core_num()*/
-					/*, *reinterpret_cast<uint64_t *>(local_buf + *(reinterpret_cast<const uint64_t *>(obj_id)))*/
-					/*, *(reinterpret_cast<uint64_t *>(data_buf)), tmp, local_buf);*/
 	}
 	else
 		std::cerr << "ds_id: " << ds_id << " not found" << std::endl;
