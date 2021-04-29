@@ -509,22 +509,37 @@ void RDMADevice::_construct(tcpconn_t *remote_slave, uint8_t ds_type, uint8_t ds
 	__builtin_memcpy(&req[kOpcodeSize], &ds_type, sizeof(ds_type));
 	__builtin_memcpy(&req[kOpcodeSize + sizeof(ds_type)], &ds_id,
 			 Object::kDSIDSize);
-	__builtin_memcpy(&req[kOpcodeSize + sizeof(ds_type) + Object::kDSIDSize],
-			 &param_len, sizeof(param_len));
 
-	memcpy(&req[kOpcodeSize + sizeof(ds_type) + Object::kDSIDSize +
-		    sizeof(param_len)],
-	       params, param_len);
-	helpers::tcp_write_until(remote_slave, req,
-				 kOpcodeSize + sizeof(ds_type) + Object::kDSIDSize +
-				     sizeof(param_len) + param_len);
+	/* TODO: extract data_size from params in HashTable */
+	if(ds_type == kHashTableDSType){
+		uint8_t	len = 8;
+		__builtin_memcpy(&req[kOpcodeSize + sizeof(ds_type) + Object::kDSIDSize],
+			 	&len, sizeof(len));
+		memcpy(&req[kOpcodeSize + sizeof(ds_type) + Object::kDSIDSize +
+			    sizeof(len)],
+		       &params[4], len);
+		helpers::tcp_write_until(remote_slave, req,
+					 kOpcodeSize + sizeof(ds_type) + Object::kDSIDSize +
+					     sizeof(len) + len);
+	}
+	else{
+		__builtin_memcpy(&req[kOpcodeSize + sizeof(ds_type) + Object::kDSIDSize],
+			 	&param_len, sizeof(param_len));
+		memcpy(&req[kOpcodeSize + sizeof(ds_type) + Object::kDSIDSize +
+			    sizeof(param_len)],
+		       params, param_len);
+		helpers::tcp_write_until(remote_slave, req,
+					 kOpcodeSize + sizeof(ds_type) + Object::kDSIDSize +
+					     sizeof(param_len) + param_len);
+	}
+
 
 	/* receive mr_data_t */
 	struct mr_data_t	mr_data;
 	helpers::tcp_read_until(remote_slave, &mr_data, sizeof(struct mr_data_t));
 	
 	/*remote_mrs[ds_id] = mr_data;*/
-	server_.construct(ds_type, ds_id, &manager_, mr_data, &local_mr, data_len_mr);
+	server_.construct(ds_type, ds_id, param_len, params, &manager_, mr_data, &local_mr, data_len_mr);
 }
 
 /* Request:

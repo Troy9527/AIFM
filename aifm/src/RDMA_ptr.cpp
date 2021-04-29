@@ -11,7 +11,7 @@ extern "C" {
 
 namespace far_memory {
 
-RDMAPtr::RDMAPtr(RDMAManager *manager, struct mr_data_t mr, struct ibv_mr **l_mr, struct ibv_mr **dlen_mr){
+RDMAPtr::RDMAPtr(uint32_t param_len, uint8_t *params, RDMAManager *manager, struct mr_data_t mr, struct ibv_mr **l_mr, struct ibv_mr **dlen_mr){
 	manager_ = manager;
 	remote_mr = mr;
 	local_mr = l_mr;
@@ -74,9 +74,9 @@ void RDMAPtr::compute(uint8_t opcode, uint16_t input_len, const uint8_t *input_b
   BUG();
 }
 
-RDMADS *RDMAPtrFactory::build(RDMAManager *manager, struct mr_data_t mr
+RDMADS *RDMAPtrFactory::build(uint32_t param_len, uint8_t *params, RDMAManager *manager, struct mr_data_t mr
 		, struct ibv_mr **l_mr, struct ibv_mr **dlen_mr){
-  return new RDMAPtr(manager, mr, l_mr, dlen_mr);
+  return new RDMAPtr(param_len, params, manager, mr, l_mr, dlen_mr);
 }
 
 }; // namespace far_memory

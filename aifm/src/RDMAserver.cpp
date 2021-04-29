@@ -7,7 +7,7 @@ extern "C" {
 
 #include "RDMAserver.hpp"
 /*#include "server_dataframe_vector.hpp"*/
-/*#include "server_hashtable.hpp"*/
+#include "RDMA_hashtable.hpp"
 #include "RDMA_ptr.hpp"
 
 namespace far_memory {
@@ -16,7 +16,7 @@ std::unique_ptr<RDMADS> RDMAServer::server_ds_ptrs_[kMaxNumDSIDs];
 
 RDMAServer::RDMAServer() {
   register_ds(kRDMAVanillaPtrDSType, new RDMAPtrFactory());
-  /*register_ds(kHashTableDSType, new ServerHashTableFactory());*/
+  register_ds(kHashTableDSType, new RDMAHashTableFactory());
   /*register_ds(kDataFrameVectorDSType, new ServerDataFrameVectorFactory());*/
 }
 
@@ -24,11 +24,11 @@ void RDMAServer::register_ds(uint8_t ds_type, RDMADSFactory *factory) {
   registered_server_ds_factorys_[ds_type] = factory;
 }
 
-void RDMAServer::construct(uint8_t ds_type, uint8_t ds_id, RDMAManager *manager
-		, struct mr_data_t mr, struct ibv_mr **l_mr, struct ibv_mr **dlen_mr) {
+void RDMAServer::construct(uint8_t ds_type, uint8_t ds_id, uint32_t param_len, uint8_t *params
+		, RDMAManager *manager, struct mr_data_t mr, struct ibv_mr **l_mr, struct ibv_mr **dlen_mr) {
   auto factory = registered_server_ds_factorys_[ds_type];
   BUG_ON(server_ds_ptrs_[ds_id]);
-  server_ds_ptrs_[ds_id].reset(factory->build(manager, mr, l_mr, dlen_mr));
+  server_ds_ptrs_[ds_id].reset(factory->build(param_len, params, manager, mr, l_mr, dlen_mr));
 }
 
 void RDMAServer::destruct(uint8_t ds_id) {

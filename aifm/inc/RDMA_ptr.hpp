@@ -16,7 +16,7 @@ private:
   friend class RDMAPtrFactory;
 
 public:
-  RDMAPtr(RDMAManager *manager, struct mr_data_t mr, struct ibv_mr **l_mr, struct ibv_mr **dlen_mr);
+  RDMAPtr(uint32_t param_len, uint8_t *params, RDMAManager *manager, struct mr_data_t mr, struct ibv_mr **l_mr, struct ibv_mr **dlen_mr);
   ~RDMAPtr();
   void read_object(uint8_t obj_id_len, const uint8_t *obj_id,
                    uint16_t *data_len, uint8_t *data_buf);
@@ -29,6 +29,6 @@ public:
 
 class RDMAPtrFactory : public RDMADSFactory {
 public:
-  RDMADS *build(RDMAManager *manager, struct mr_data_t mr, struct ibv_mr **l_mr, struct ibv_mr **dlen_mr);
+  RDMADS *build(uint32_t param_len, uint8_t *params, RDMAManager *manager, struct mr_data_t mr, struct ibv_mr **l_mr, struct ibv_mr **dlen_mr);
 };
 } // namespace far_memory

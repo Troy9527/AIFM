@@ -16,7 +16,7 @@ private:
 public:
   RDMAServer();
   void register_ds(uint8_t ds_type, RDMADSFactory *factory);
-  void construct(uint8_t ds_type, uint8_t ds_id, RDMAManager *manager
+  void construct(uint8_t ds_type, uint8_t ds_id, uint32_t param_len, uint8_t *params, RDMAManager *manager
 		  , struct mr_data_t mr, struct ibv_mr **l_mr, struct ibv_mr **dlen_mr);
   void destruct(uint8_t ds_id);
   void read_object(uint8_t ds_id, uint8_t obj_id_len, const uint8_t *obj_id,

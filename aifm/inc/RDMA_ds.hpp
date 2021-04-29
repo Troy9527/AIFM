@@ -19,6 +19,6 @@ public:
 
 class RDMADSFactory {
 public:
-  virtual RDMADS *build(RDMAManager *manager, struct mr_data_t mr, struct ibv_mr **l_mr, struct ibv_mr **dlen_mr) = 0;
+  virtual RDMADS *build(uint32_t param_len, uint8_t *params, RDMAManager *manager, struct mr_data_t mr, struct ibv_mr **l_mr, struct ibv_mr **dlen_mr) = 0;
 };
 } // namespace far_memory
