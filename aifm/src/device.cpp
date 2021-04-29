@@ -354,8 +354,6 @@ RDMADevice::RDMADevice(netaddr raddr, uint32_t num_connections, uint64_t far_mem
 	}
 
 	remote_mrs.clear();
-	construct(kVanillaPtrDSType, kVanillaPtrDSID, sizeof(far_mem_size),
-		reinterpret_cast<uint8_t *>(&far_mem_size));
 	
 	/* register MR for RDMA Read/Write data_len */
 	void	*buff;
@@ -365,12 +363,15 @@ RDMADevice::RDMADevice(netaddr raddr, uint32_t num_connections, uint64_t far_mem
 		if(data_len_mr[i] == NULL)
 			fprintf(stderr, "registry of data_len_mr failed\n");
 	}
+	
+	construct(kRDMAVanillaPtrDSType, kRDMAVanillaPtrDSID, sizeof(far_mem_size),
+		reinterpret_cast<uint8_t *>(&far_mem_size));
 }
 
 RDMADevice::~RDMADevice(){
 	tcpconn_t *remote_master_ = manager_.get_tcpconn();
 	uint8_t ack;
-	destruct(kVanillaPtrDSID);
+	destruct(kRDMAVanillaPtrDSID);
 
 	/*send shutdown signal*/
 	helpers::tcp_write_until(remote_master_, &kOpShutdown, kOpcodeSize);
@@ -392,6 +393,7 @@ RDMADevice::~RDMADevice(){
 void RDMADevice::read_object(uint8_t ds_id, uint8_t obj_id_len, const uint8_t *obj_id,
 		uint16_t *data_len, uint8_t *data_buf){
 	Stats::start_measure_read_object_cycles();
+	/*
 	std::map<uint8_t, struct mr_data_t>::iterator	iter;
 	std::map<uint64_t, uint16_t>::iterator	iter2;
 	struct mr_data_t	*remote_mr;
@@ -426,6 +428,9 @@ void RDMADevice::read_object(uint8_t ds_id, uint8_t obj_id_len, const uint8_t *o
 	}
 	else
 		std::cerr << "ds_id: " << ds_id << " not found" << std::endl;
+	*/
+
+	server_.read_object(ds_id, obj_id_len, obj_id, data_len, data_buf);
 
 
 	Stats::finish_measure_read_object_cycles();
@@ -434,7 +439,7 @@ void RDMADevice::read_object(uint8_t ds_id, uint8_t obj_id_len, const uint8_t *o
 void RDMADevice::write_object(uint8_t ds_id, uint8_t obj_id_len, const uint8_t *obj_id, 
 		uint16_t data_len, const uint8_t *data_buf){
 	Stats::start_measure_write_object_cycles();
-	
+	/*
 	std::map<uint8_t, struct mr_data_t>::iterator	iter;
 	struct mr_data_t	*remote_mr;
 	struct ibv_mr		*mr;
@@ -458,18 +463,18 @@ void RDMADevice::write_object(uint8_t ds_id, uint8_t obj_id_len, const uint8_t *
 				, (*(reinterpret_cast<const uint64_t *>(obj_id))) + sizeof(uint16_t));
 		manager_.poll_completion(get_core_num());
 		preempt_enable();
-		
-		/*__builtin_memcpy(local_buf + *(reinterpret_cast<const uint64_t *>(obj_id)), data_buf, data_len);*/
-
 	}
 	else
 		std::cerr << "ds_id: " << ds_id << " not found" << std::endl;
+	*/
+
+	server_.write_object(ds_id, obj_id_len, obj_id, data_len, data_buf);
 
 	Stats::finish_measure_write_object_cycles();
 }
 
 bool RDMADevice::remove_object(uint64_t ds_id, uint8_t obj_id_len, const uint8_t *obj_id){
-	
+	return server_.remove_object(ds_id, obj_id_len, obj_id);
 }
 
 void RDMADevice::construct(uint8_t ds_type, uint8_t ds_id, uint8_t param_len, 
@@ -518,7 +523,8 @@ void RDMADevice::_construct(tcpconn_t *remote_slave, uint8_t ds_type, uint8_t ds
 	struct mr_data_t	mr_data;
 	helpers::tcp_read_until(remote_slave, &mr_data, sizeof(struct mr_data_t));
 	
-	remote_mrs[ds_id] = mr_data;
+	/*remote_mrs[ds_id] = mr_data;*/
+	server_.construct(ds_type, ds_id, &manager_, mr_data, &local_mr, data_len_mr);
 }
 
 /* Request:
@@ -537,7 +543,8 @@ void RDMADevice::_destruct(tcpconn_t *remote_slave, uint8_t ds_id){
 	uint8_t ack;
 	helpers::tcp_read_until(remote_slave, &ack, sizeof(ack));
 
-	remote_mrs.erase(ds_id);
+	/*remote_mrs.erase(ds_id);*/
+	server_.destruct(ds_id);
 }
 
 void RDMADevice::reg_local_cache(uint8_t* cache, uint64_t len){

@@ -9,6 +9,7 @@ extern "C" {
 #include "server.hpp"
 #include "shared_pool.hpp"
 #include "RDMAManager.hpp"
+#include "RDMAserver.hpp"
 
 namespace far_memory {
 
@@ -136,6 +137,7 @@ private:
   struct ibv_mr				*local_mr = NULL;
   struct ibv_mr				*data_len_mr[helpers::kNumCPUs];
   uint8_t				*local_buf = NULL;
+  RDMAServer				server_;
 
 public:
   constexpr static uint32_t kOpcodeSize = 1;

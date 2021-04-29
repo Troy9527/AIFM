@@ -19,7 +19,7 @@ using namespace std;
 
 constexpr static uint64_t kCacheSize = (128ULL << 20);
 constexpr static uint64_t kFarMemSize = (4ULL << 30);
-constexpr static uint32_t kNumGCThreads = 12;
+constexpr static uint32_t kNumGCThreads = 10;
 constexpr static uint32_t kNumEntries =
     (8ULL << 20); // So the array size is larger than the local cache size.
 constexpr static uint32_t kNumConnections = 300;

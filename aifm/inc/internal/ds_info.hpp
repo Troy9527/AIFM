@@ -20,4 +20,11 @@ constexpr static uint8_t kHashTableDSType = 1;
 // DataFrameVector.
 constexpr static uint8_t kDataFrameVectorDSType = 2;
 
+/* DS type for RDMA */
+constexpr static uint8_t kRDMAVanillaPtrDSType = 3;
+constexpr static uint8_t kRDMAVanillaPtrDSID = 3; 
+constexpr static uint8_t kRDMAHashTableDSType = 4;
+constexpr static uint8_t kRDMADataFrameVectorDSType = 5;
+
+
 } // namespace far_memory

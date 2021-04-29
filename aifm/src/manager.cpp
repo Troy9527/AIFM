@@ -71,7 +71,7 @@ FarMemManager::FarMemManager(uint64_t cache_size, uint64_t far_mem_size,
        ds_id <
        std::numeric_limits<decltype(available_ds_ids_)::value_type>::max();
        ds_id++) {
-    if (ds_id != kVanillaPtrDSID) {
+    if (ds_id != kVanillaPtrDSID && ds_id != kRDMAVanillaPtrDSID) {
       available_ds_ids_.push(ds_id);
     }
   }
