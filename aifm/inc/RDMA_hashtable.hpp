@@ -1,6 +1,7 @@
 #pragma once
 
-#include "local_concurrent_hopscotch.hpp"
+/*#include "local_concurrent_hopscotch.hpp"*/
+#include "RDMA_concurrent_hopscotch.hpp"
 #include "RDMAserver.hpp"
 #include "RDMAManager.hpp"
 
@@ -10,7 +11,8 @@
 namespace far_memory {
 class RDMAHashTable : public RDMADS {
 private:
-  std::unique_ptr<LocalGenericConcurrentHopscotch> local_hopscotch_;
+  /*std::unique_ptr<LocalGenericConcurrentHopscotch> local_hopscotch_;*/
+  std::unique_ptr<RDMAGenericConcurrentHopscotch> local_hopscotch_;
   friend class RDMAHashTableFactory;
 
 public:

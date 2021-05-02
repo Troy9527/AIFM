@@ -2,6 +2,7 @@
 #include "helpers.hpp"
 
 #include <cstring>
+#include <iostream>
 
 namespace far_memory {
 
@@ -10,8 +11,11 @@ RDMAHashTable::RDMAHashTable(uint32_t param_len, uint8_t *params, RDMAManager *m
   auto remote_num_entries_shift = *reinterpret_cast<uint32_t *>(&params[0]);
   auto remote_data_size =
       *reinterpret_cast<uint64_t *>(&params[sizeof(remote_num_entries_shift)]);
-  local_hopscotch_.reset(new LocalGenericConcurrentHopscotch(
-      remote_num_entries_shift, remote_data_size));
+  std::cout << "Data size: " << remote_data_size << std::endl;
+  /*local_hopscotch_.reset(new LocalGenericConcurrentHopscotch(*/
+      /*remote_num_entries_shift, remote_data_size));*/
+  local_hopscotch_.reset(new RDMAGenericConcurrentHopscotch(
+      remote_num_entries_shift, remote_data_size, manager, mr, l_mr, dlen_mr));
 }
 
 RDMAHashTable::~RDMAHashTable() {}
