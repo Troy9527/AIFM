@@ -358,8 +358,10 @@ RDMADevice::RDMADevice(netaddr raddr, uint32_t num_connections, uint64_t far_mem
 	/* register MR for RDMA Read/Write data_len */
 	void	*buff;
 	for(uint32_t i = 0; i < helpers::kNumCPUs; i++){
-		buff = malloc(sizeof(uint16_t));
-		data_len_mr[i] = manager_.reg_addr(reinterpret_cast<uint64_t>(buff), sizeof(uint16_t), true);
+		/*buff = malloc(sizeof(uint16_t));*/
+		/*data_len_mr[i] = manager_.reg_addr(reinterpret_cast<uint64_t>(buff), sizeof(uint16_t), true);*/
+		buff = malloc((1<<16) + (1<<8));
+		data_len_mr[i] = manager_.reg_addr(reinterpret_cast<uint64_t>(buff), (1<<16) + (1 << 8), true);
 		if(data_len_mr[i] == NULL)
 			fprintf(stderr, "registry of data_len_mr failed\n");
 	}
@@ -431,6 +433,10 @@ void RDMADevice::read_object(uint8_t ds_id, uint8_t obj_id_len, const uint8_t *o
 	*/
 
 	server_.read_object(ds_id, obj_id_len, obj_id, data_len, data_buf);
+	
+	/*if(data_buf < ptr || (data_buf + *data_len) > (ptr + size))*/
+		/*std::cout << "Out of bound" << std::endl;*/
+	/*fprintf(stdout, "%p\n", data_buf + *data_len);*/
 
 
 	Stats::finish_measure_read_object_cycles();
@@ -467,6 +473,9 @@ void RDMADevice::write_object(uint8_t ds_id, uint8_t obj_id_len, const uint8_t *
 	else
 		std::cerr << "ds_id: " << ds_id << " not found" << std::endl;
 	*/
+	/*if(data_buf < ptr || (data_buf + data_len) > (ptr + size))*/
+		/*std::cout << "Out of bound" << std::endl;*/
+	/*fprintf(stdout, "%p\n", data_buf + data_len);*/
 
 	server_.write_object(ds_id, obj_id_len, obj_id, data_len, data_buf);
 
@@ -513,11 +522,14 @@ void RDMADevice::_construct(tcpconn_t *remote_slave, uint8_t ds_type, uint8_t ds
 	/* TODO: extract data_size from params in HashTable */
 	if(ds_type == kHashTableDSType){
 		uint8_t	len = 8;
+  		auto remote_data_size =
+      			*reinterpret_cast<uint64_t *>(&params[4]);
+		remote_data_size += 8;
 		__builtin_memcpy(&req[kOpcodeSize + sizeof(ds_type) + Object::kDSIDSize],
 			 	&len, sizeof(len));
 		memcpy(&req[kOpcodeSize + sizeof(ds_type) + Object::kDSIDSize +
 			    sizeof(len)],
-		       &params[4], len);
+		       &remote_data_size, len);
 		helpers::tcp_write_until(remote_slave, req,
 					 kOpcodeSize + sizeof(ds_type) + Object::kDSIDSize +
 					     sizeof(len) + len);
@@ -565,7 +577,7 @@ void RDMADevice::_destruct(tcpconn_t *remote_slave, uint8_t ds_id){
 void RDMADevice::reg_local_cache(uint8_t* cache, uint64_t len){
 	ptr = cache;
 	size = len;
-	fprintf(stdout, "local_cache_ptr=%p, len=%ld\n", ptr, size);	
+	fprintf(stdout, "local_cache_ptr=%p, end=%p, len=%ld\n", ptr, ptr + size, size);	
 	
 	
 	local_mr = manager_.reg_addr(reinterpret_cast<uint64_t>(ptr), size, false);

@@ -9,6 +9,7 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
+#include <limits>
 
 namespace far_memory {
 
@@ -24,7 +25,8 @@ private:
 
 #pragma pack(push, 1)
   struct BucketEntry {
-    constexpr static uint64_t kBusyPtr = 0x1;
+    constexpr static uint64_t kBusyPtr = ULLONG_MAX - 1;
+    constexpr static uint64_t kEmptyPtr = ULLONG_MAX;
 
     uint32_t bitmap;
     rt::Spin spin;

@@ -6,19 +6,23 @@ extern "C" {
 #include "helpers.hpp"
 
 #include <cstring>
+#include <iostream>
+#include <cstdio>
+#include <cstdlib>
 
 namespace far_memory {
 
 FORCE_INLINE RDMAGenericConcurrentHopscotch::BucketEntry::BucketEntry() {
   bitmap = timestamp = 0;
-  ptr = nullptr;
+  ptr = reinterpret_cast<char*>(BucketEntry::kEmptyPtr);
 }
 
 RDMAGenericConcurrentHopscotch::RDMAGenericConcurrentHopscotch(uint32_t num_entries_shift, uint64_t data_size, RDMAManager *manager
     , struct mr_data_t mr, struct ibv_mr **l_mr, struct ibv_mr **dlen_mr)
     : kHashMask_((1 << num_entries_shift) - 1),
       kNumEntries_((1 << num_entries_shift) + kNeighborhood),
-      slab_base_addr_(reinterpret_cast<uint64_t>(helpers::allocate_hugepage(data_size))),
+      /*slab_base_addr_(reinterpret_cast<uint64_t>(helpers::allocate_hugepage(data_size))),*/
+      slab_base_addr_(0),
       slab_(reinterpret_cast<uint8_t *>(slab_base_addr_), data_size) {
   // Check overflow.
   BUG_ON(((kHashMask_ + 1) >> num_entries_shift) != 1);
@@ -42,7 +46,7 @@ void RDMAGenericConcurrentHopscotch::do_remove(BucketEntry *bucket,
   auto header = entry->header;
   auto old_data_size =  header.key_len + header.val_len;
   slab_.free(reinterpret_cast<uint8_t *>(entry->ptr), old_data_size);
-  entry->ptr = nullptr;
+  entry->ptr = reinterpret_cast<char*>(BucketEntry::kEmptyPtr);
   auto offset = entry - bucket;
   assert(bucket->bitmap & (1 << offset));
   bucket->bitmap ^= (1 << offset);
@@ -57,6 +61,8 @@ void RDMAGenericConcurrentHopscotch::get(uint8_t key_len, const uint8_t *key,
   decltype(bucket) entry;
   uint64_t timestamp;
   uint32_t retry_counter = 0;
+  struct ibv_mr	*mr;
+  void	*buff;
 
   auto get_once = [&]<bool Lock>() -> bool {
     if constexpr (Lock) {
@@ -77,30 +83,33 @@ void RDMAGenericConcurrentHopscotch::get(uint8_t key_len, const uint8_t *key,
       auto header = entry->header;
       auto *slab_val_ptr = entry->ptr;
       rmb();
-      if (likely(entry->ptr)) {
-        if (header.key_len == key_len) {
-          if (strncmp(slab_val_ptr + header.val_len,
-                      reinterpret_cast<const char *>(key), key_len) == 0) {
-            *val_len = header.val_len;
-            memcpy(val, slab_val_ptr, *val_len);
-            return true;
-          }
+      if (header.key_len == key_len) {
+	/* RDMA Read */
+	preempt_disable();
+	mr = data_len_mr[get_core_num()];
+	buff = mr->addr;
+	manager_->post_send(get_core_num(), IBV_WR_RDMA_READ, reinterpret_cast<uint64_t>(buff)
+			, header.key_len, mr->lkey, &remote_mr
+			, (reinterpret_cast<uint64_t>(slab_val_ptr + header.val_len)));
+	manager_->poll_completion(get_core_num());
+        
+	if (strncmp(reinterpret_cast<char *>(buff),
+                    reinterpret_cast<const char *>(key), key_len) == 0) {
+          *val_len = header.val_len;
+	  
+	  manager_->post_send(get_core_num(), IBV_WR_RDMA_READ, reinterpret_cast<uint64_t>(buff)
+	  		, header.val_len, mr->lkey, &remote_mr
+	  		, (reinterpret_cast<uint64_t>(slab_val_ptr)));
+	  manager_->poll_completion(get_core_num());
+	  memcpy(val, buff, header.val_len);
+	  preempt_enable();
+	  
+          /*memcpy(val, slab_val_ptr, *val_len);*/
+          return true;
         }
+	preempt_enable();
       }
-      /*auto *header = entry->ptr;*/
-      /*auto *slab_val_ptr =*/
-          /*reinterpret_cast<const char *>(header) + sizeof(KVDataHeader);*/
-      /*rmb();*/
-      /*if (likely(entry->ptr)) {*/
-        /*if (header->key_len == key_len) {*/
-          /*if (strncmp(slab_val_ptr + header->val_len,*/
-                      /*reinterpret_cast<const char *>(key), key_len) == 0) {*/
-            /**val_len = header->val_len;*/
-            /*memcpy(val, slab_val_ptr, *val_len);*/
-            /*return true;*/
-          /*}*/
-        /*}*/
-      /*}*/
+      
       bitmap ^= (1 << offset);
     }
     return false;
@@ -132,7 +141,7 @@ void RDMAGenericConcurrentHopscotch::get(uint8_t key_len, const uint8_t *key,
 remove:
   bucket->spin.Lock();
   auto spin_guard = helpers::finally([&]() { bucket->spin.Unlock(); });
-  if (likely(entry->ptr)) {
+  /*if (likely(entry->ptr)) {*/
     if (likely(timestamp == ACCESS_ONCE(bucket->timestamp))) {
       // Fast path.
       do_remove(bucket, entry);
@@ -141,7 +150,7 @@ remove:
       spin_guard.reset();
       this->remove(key_len, key);
     }
-  }
+  /*}*/
 }
 
 bool RDMAGenericConcurrentHopscotch::put(uint8_t key_len, const uint8_t *key,
@@ -151,6 +160,8 @@ bool RDMAGenericConcurrentHopscotch::put(uint8_t key_len, const uint8_t *key,
   uint32_t bucket_idx = hash & kHashMask_;
   auto *bucket = &(buckets_[bucket_idx]);
   auto orig_bucket_idx = bucket_idx;
+  struct ibv_mr	*mr;
+  void	*buff;
 
   while (unlikely(!bucket->spin.TryLockWp())) {
     thread_yield();
@@ -165,7 +176,16 @@ bool RDMAGenericConcurrentHopscotch::put(uint8_t key_len, const uint8_t *key,
     auto header = entry->header;
     if (header.key_len == key_len) {
       auto *slab_val_ptr = reinterpret_cast<char *>(entry->ptr);
-      if (strncmp(slab_val_ptr + header.val_len,
+      
+      preempt_disable();
+      mr = data_len_mr[get_core_num()];
+      buff = mr->addr;
+      manager_->post_send(get_core_num(), IBV_WR_RDMA_READ, reinterpret_cast<uint64_t>(buff)
+      		, header.key_len, mr->lkey, &remote_mr
+      		, reinterpret_cast<uint64_t>(entry->ptr + header.val_len));
+      manager_->poll_completion(get_core_num());
+      
+      if (strncmp(reinterpret_cast<char *>(buff),
                   reinterpret_cast<const char *>(key), key_len) == 0) {
         if (unlikely(header.val_len != val_len)) {
           auto old_data_size = key_len + header.val_len;
@@ -173,16 +193,42 @@ bool RDMAGenericConcurrentHopscotch::put(uint8_t key_len, const uint8_t *key,
           auto new_data_size = key_len + val_len;
           auto *new_header =
               reinterpret_cast<char *>(slab_.allocate(new_data_size));
-          BUG_ON(!new_header);
+          /*BUG_ON(!new_header);*/
           entry->ptr = new_header;
           entry->header = {.key_len = key_len, .val_len = val_len};
           slab_val_ptr =
               reinterpret_cast<char *>(new_header);
-          memcpy(slab_val_ptr + val_len, key, key_len);
+	  
+	  memcpy(buff, key, key_len);
+          manager_->post_send(get_core_num(), IBV_WR_RDMA_WRITE, reinterpret_cast<uint64_t>(buff)
+      		, key_len, mr->lkey, &remote_mr
+      		, reinterpret_cast<uint64_t>(slab_val_ptr + val_len));
+          manager_->poll_completion(get_core_num());
+
+          /*memcpy(slab_val_ptr + val_len, key, key_len);*/
         }
-        memcpy(slab_val_ptr, val, val_len);
+
+	memcpy(buff, val, val_len);
+        manager_->post_send(get_core_num(), IBV_WR_RDMA_WRITE, reinterpret_cast<uint64_t>(buff)
+      	      , val_len, mr->lkey, &remote_mr
+      	      , reinterpret_cast<uint64_t>(slab_val_ptr));
+        manager_->poll_completion(get_core_num());
+
+	
+        manager_->post_send(get_core_num(), IBV_WR_RDMA_READ, reinterpret_cast<uint64_t>(buff)
+        		, header.key_len + header.val_len, mr->lkey, &remote_mr
+        		, reinterpret_cast<uint64_t>(entry->ptr));
+        manager_->poll_completion(get_core_num());
+	
+	if(strncmp(reinterpret_cast<char *>(buff), reinterpret_cast<const char *>(key), key_len) != 0)
+		std::cout << "wrong" << std::endl;
+
+        preempt_enable();
+	std::cout << "hello" << std::endl;
+        /*memcpy(slab_val_ptr, val, val_len);*/
         return true;
       }
+      preempt_enable();
     }
     bitmap ^= (1 << offset);
   }
@@ -191,7 +237,7 @@ bool RDMAGenericConcurrentHopscotch::put(uint8_t key_len, const uint8_t *key,
   while (bucket_idx < kNumEntries_) {
     auto *entry = &buckets_[bucket_idx];
     if (__sync_bool_compare_and_swap(reinterpret_cast<uint64_t *>(&entry->ptr),
-                                     0, BucketEntry::kBusyPtr)) {
+                                     BucketEntry::kEmptyPtr, BucketEntry::kBusyPtr)) {
       break;
     }
     bucket_idx++;
@@ -265,14 +311,44 @@ bool RDMAGenericConcurrentHopscotch::put(uint8_t key_len, const uint8_t *key,
   auto *final_entry = &buckets_[bucket_idx];
   auto *slab_addr = reinterpret_cast<char *>(
       slab_.allocate(key_len + val_len));
-  BUG_ON(!slab_addr);
+  /*BUG_ON(!slab_addr);*/
   final_entry->ptr = slab_addr;
 
   // Write object.
   final_entry->header = {.key_len = key_len, .val_len = val_len};
   auto *slab_val_ptr = reinterpret_cast<char *>(slab_addr);
-  memcpy(slab_val_ptr + val_len, key, key_len);
-  memcpy(slab_val_ptr, val, val_len);
+
+  preempt_disable();
+  mr = data_len_mr[get_core_num()];
+  buff = mr->addr;
+  memcpy(buff, val, val_len);
+  memcpy(reinterpret_cast<char*>(buff) + val_len, key, key_len);
+  manager_->post_send(get_core_num(), IBV_WR_RDMA_WRITE, reinterpret_cast<uint64_t>(buff)
+        , val_len + key_len, mr->lkey, &remote_mr
+        , reinterpret_cast<uint64_t>(slab_val_ptr));
+  manager_->poll_completion(get_core_num());
+        
+  manager_->post_send(get_core_num(), IBV_WR_RDMA_READ, reinterpret_cast<uint64_t>(buff)
+  		, key_len + val_len, mr->lkey, &remote_mr
+  		, reinterpret_cast<uint64_t>(final_entry->ptr));
+  manager_->poll_completion(get_core_num());
+  
+  /*if(strncmp(reinterpret_cast<char *>(buff) + val_len, reinterpret_cast<const char *>(key), key_len) != 0)*/
+  	/*std::cout << "wrong" << std::endl;*/
+  /*if(strncmp(reinterpret_cast<char *>(buff), reinterpret_cast<const char *>(val), val_len) != 0)*/
+  	/*std::cout << "fuck" << std::endl;*/
+  /*fprintf(stdout, "%s\n", reinterpret_cast<const char *>(key));*/
+  /*fflush(stdout);*/
+  /*int	len = (key_len > 63) ? 63 : key_len;*/
+  /*if(strncmp("illtbxgogzvurfawdvejnftyhclwjydrkqmnnsdwsyqleshjnnsdslbcppyzndq", reinterpret_cast<const char *>(key), len) == 0){*/
+	  /*fprintf(stdout, "%p\n", final_entry->ptr);*/
+	  /*fflush(stdout);*/
+  /*}*/
+
+  preempt_enable();
+
+  /*memcpy(slab_val_ptr + val_len, key, key_len);*/
+  /*memcpy(slab_val_ptr, val, val_len);*/
   wmb();
 
   // Update the bitmap of the final bucket.
@@ -286,6 +362,9 @@ bool RDMAGenericConcurrentHopscotch::remove(uint8_t key_len,
   uint32_t hash = hash_32(static_cast<const void *>(key), key_len);
   uint32_t bucket_idx = hash & kHashMask_;
   auto *bucket = &(buckets_[bucket_idx]);
+  struct ibv_mr	*mr;
+  void	*buff;
+  char	tmp[256];
 
   while (unlikely(!bucket->spin.TryLockWp())) {
     thread_yield();
@@ -300,11 +379,22 @@ bool RDMAGenericConcurrentHopscotch::remove(uint8_t key_len,
     if (header.key_len == key_len) {
       auto *slab_val_ptr =
           reinterpret_cast<const char *>(entry->ptr);
-      if (strncmp(slab_val_ptr + header.val_len,
+      
+      preempt_disable();
+      mr = data_len_mr[get_core_num()];
+      buff = mr->addr;
+      manager_->post_send(get_core_num(), IBV_WR_RDMA_READ, reinterpret_cast<uint64_t>(buff)
+            , key_len, mr->lkey, &remote_mr
+            , reinterpret_cast<uint64_t>(slab_val_ptr + header.val_len));
+      manager_->poll_completion(get_core_num());
+
+      if (strncmp(reinterpret_cast<char *>(buff),
                   reinterpret_cast<const char *>(key), key_len) == 0) {
         do_remove(bucket, entry);
+        preempt_enable();
         return true;
       }
+      preempt_enable();
     }
     bitmap ^= (1 << offset);
   }
